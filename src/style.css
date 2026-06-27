@@ -438,6 +438,7 @@ select {
 
 .table-scroll-wrap table {
   margin-top: 0;
+  table-layout: fixed;
 }
 
 .table-scroll-wrap thead th {
@@ -445,6 +446,40 @@ select {
   top: 0;
   z-index: 1;
   background: #f9f5ea;
+}
+
+.monthly-detail-card .table-scroll-wrap th:nth-child(1),
+.monthly-detail-card .table-scroll-wrap td:nth-child(1) {
+  width: 11ch;
+}
+
+.monthly-detail-card .table-scroll-wrap th:nth-child(2),
+.monthly-detail-card .table-scroll-wrap td:nth-child(2) {
+  width: 24%;
+}
+
+.monthly-detail-card .table-scroll-wrap th:nth-child(3),
+.monthly-detail-card .table-scroll-wrap td:nth-child(3) {
+  width: 20%;
+}
+
+.monthly-detail-card .table-scroll-wrap th:nth-child(4),
+.monthly-detail-card .table-scroll-wrap td:nth-child(4) {
+  width: 14%;
+}
+
+.monthly-detail-card .table-scroll-wrap .col-abono {
+  width: 16ch;
+}
+
+.monthly-detail-card .table-scroll-wrap .col-gasto {
+  width: 18ch;
+}
+
+.monthly-detail-card .table-scroll-wrap .col-abono,
+.monthly-detail-card .table-scroll-wrap .col-gasto {
+  text-align: right;
+  white-space: nowrap;
 }
 
 .sort-header-btn {

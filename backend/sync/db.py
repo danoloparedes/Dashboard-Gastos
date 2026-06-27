@@ -49,6 +49,35 @@ def upsert_transaction(
     )
 
 
+def delete_missing_transactions(
+    conn: sqlite3.Connection,
+    *,
+    worksheet_name: str,
+    current_external_ids: set[str],
+) -> int:
+    prefix = f"{worksheet_name}:%"
+
+    if not current_external_ids:
+        cursor = conn.execute(
+            "DELETE FROM transactions WHERE external_id LIKE ?",
+            (prefix,),
+        )
+        return int(cursor.rowcount or 0)
+
+    placeholders = ", ".join("?" for _ in current_external_ids)
+    params = [prefix, *sorted(current_external_ids)]
+
+    cursor = conn.execute(
+        f"""
+        DELETE FROM transactions
+        WHERE external_id LIKE ?
+          AND external_id NOT IN ({placeholders})
+        """,
+        params,
+    )
+    return int(cursor.rowcount or 0)
+
+
 def count_transactions(conn: sqlite3.Connection) -> int:
     row = conn.execute("SELECT COUNT(*) AS total FROM transactions").fetchone()
     if row is None:

@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
+from sync_google_sheet import run_sync
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / '.env')
@@ -18,6 +19,35 @@ if not Path(DB_PATH).is_absolute():
 
 HOST = os.getenv('API_HOST', '0.0.0.0')
 PORT = int(os.getenv('API_PORT', '8000'))
+
+
+def run_sync_now() -> dict:
+  spreadsheet_id = os.getenv('GOOGLE_SHEETS_SPREADSHEET_ID', '').strip()
+  worksheet_name = os.getenv('GOOGLE_SHEETS_WORKSHEET', 'Gastos').strip() or 'Gastos'
+  credentials_file = os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE', './service-account.json').strip()
+
+  if not spreadsheet_id:
+    raise RuntimeError('Falta GOOGLE_SHEETS_SPREADSHEET_ID en backend/.env')
+
+  credentials_path = Path(credentials_file)
+  if not credentials_path.is_absolute():
+    credentials_path = (BASE_DIR / credentials_path).resolve()
+  if not credentials_path.exists():
+    alt_path = (BASE_DIR / 'sync' / 'service-account.json').resolve()
+    if alt_path.exists():
+      credentials_path = alt_path
+  if not credentials_path.exists():
+    raise RuntimeError(f'No existe archivo de credenciales: {credentials_path}')
+
+  schema_path = (BASE_DIR / 'sync' / 'schema.sql').resolve()
+
+  return run_sync(
+    db_path=DB_PATH,
+    schema_path=str(schema_path),
+    spreadsheet_id=spreadsheet_id,
+    worksheet_name=worksheet_name,
+    credentials_file=str(credentials_path),
+  )
 
 
 def query_transactions() -> list[dict]:
@@ -63,9 +93,22 @@ class Handler(BaseHTTPRequestHandler):
   def do_OPTIONS(self) -> None:
     self.send_response(204)
     self.send_header('Access-Control-Allow-Origin', '*')
-    self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+    self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     self.send_header('Access-Control-Allow-Headers', 'Content-Type')
     self.end_headers()
+
+  def do_POST(self) -> None:
+    parsed = urlparse(self.path)
+
+    if parsed.path == '/api/sync':
+      try:
+        result = run_sync_now()
+        self._send_json({'ok': True, 'result': result})
+      except Exception as exc:  # pragma: no cover
+        self._send_json({'ok': False, 'error': str(exc)}, status=500)
+      return
+
+    self._send_json({'error': 'not_found'}, status=404)
 
   def do_GET(self) -> None:
     parsed = urlparse(self.path)

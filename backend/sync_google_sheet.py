@@ -10,9 +10,9 @@ import gspread
 from dotenv import load_dotenv
 
 try:
-    from db import count_transactions, get_connection, init_schema, upsert_transaction
+    from db import count_transactions, delete_missing_transactions, get_connection, init_schema, upsert_transaction
 except ModuleNotFoundError:
-    from sync.db import count_transactions, get_connection, init_schema, upsert_transaction
+    from sync.db import count_transactions, delete_missing_transactions, get_connection, init_schema, upsert_transaction
 
 
 HEADER_MAP = {
@@ -90,7 +90,7 @@ def load_rows(spreadsheet_id: str, worksheet_name: str, credentials_file: str) -
     return worksheet.get_all_records(default_blank="")
 
 
-def run_sync(db_path: str, schema_path: str, spreadsheet_id: str, worksheet_name: str, credentials_file: str) -> None:
+def run_sync(db_path: str, schema_path: str, spreadsheet_id: str, worksheet_name: str, credentials_file: str) -> dict:
     records = load_rows(spreadsheet_id, worksheet_name, credentials_file)
 
     conn = get_connection(db_path)
@@ -98,6 +98,7 @@ def run_sync(db_path: str, schema_path: str, spreadsheet_id: str, worksheet_name
 
     imported = 0
     skipped = 0
+    current_external_ids: set[str] = set()
 
     for index, record in enumerate(records, start=2):
         row = normalize_headers(record)
@@ -120,6 +121,7 @@ def run_sync(db_path: str, schema_path: str, spreadsheet_id: str, worksheet_name
         gasto = parse_money(row["gasto"])
 
         external_id = f"{worksheet_name}:{index}"
+        current_external_ids.add(external_id)
 
         upsert_transaction(
             conn,
@@ -133,6 +135,12 @@ def run_sync(db_path: str, schema_path: str, spreadsheet_id: str, worksheet_name
         )
         imported += 1
 
+    deleted = delete_missing_transactions(
+        conn,
+        worksheet_name=worksheet_name,
+        current_external_ids=current_external_ids,
+    )
+
     conn.commit()
     total = count_transactions(conn)
     conn.close()
@@ -140,7 +148,16 @@ def run_sync(db_path: str, schema_path: str, spreadsheet_id: str, worksheet_name
     print(f"Filas procesadas: {len(records)}")
     print(f"Filas importadas/actualizadas: {imported}")
     print(f"Filas omitidas: {skipped}")
+    print(f"Filas eliminadas en BD (ya no existen en Sheets): {deleted}")
     print(f"Total en BD: {total}")
+
+    return {
+        "processed": len(records),
+        "imported": imported,
+        "skipped": skipped,
+        "deleted": deleted,
+        "total": total,
+    }
 
 
 def main() -> None:

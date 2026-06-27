@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import DailyTypeChart from '../components/charts/DailyTypeChart.vue'
 import StackedMonthlyChart from '../components/charts/StackedMonthlyChart.vue'
 import { CLP_FORMATTER, MONTHS, TYPES, toAmount } from '../data/transactions'
-import { fetchTransactions } from '../services/api'
+import { fetchTransactions, triggerSync } from '../services/api'
 
 defineEmits(['go-home'])
 
@@ -46,6 +46,9 @@ const loadData = async (mode = 'initial') => {
 
   error.value = ''
   try {
+    if (mode === 'manual') {
+      await triggerSync()
+    }
     transactions.value = await fetchTransactions()
     lastUpdated.value = new Date()
   } catch (err) {
@@ -432,12 +435,12 @@ const updatedLabel = computed(() => {
                   Tipo <span class="sort-indicator">{{ sortIndicator('tipo') }}</span>
                 </button>
               </th>
-              <th>
+              <th class="col-abono">
                 <button class="sort-header-btn numeric" @click="setBreakdownSort('abono')">
                   Abono <span class="sort-indicator">{{ sortIndicator('abono') }}</span>
                 </button>
               </th>
-              <th>
+              <th class="col-gasto">
                 <button class="sort-header-btn numeric" @click="setBreakdownSort('gasto')">
                   Gasto <span class="sort-indicator">{{ sortIndicator('gasto') }}</span>
                 </button>
@@ -450,8 +453,8 @@ const updatedLabel = computed(() => {
               <td>{{ row.descripcion }}</td>
               <td>{{ row.clasificacion || '-' }}</td>
               <td>{{ row.tipo || '-' }}</td>
-              <td>{{ money(row.abono) }}</td>
-              <td>{{ money(row.gasto) }}</td>
+              <td class="col-abono">{{ money(row.abono) }}</td>
+              <td class="col-gasto">{{ money(row.gasto) }}</td>
             </tr>
           </tbody>
         </table>
