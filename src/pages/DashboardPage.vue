@@ -107,7 +107,7 @@ const dailyChart = computed(() => {
   const map = new Map()
 
   for (let day = 1; day <= daysInSelectedMonth.value; day += 1) {
-    map.set(day, { day, ahorro: 0, antojo: 0, necesidad: 0 })
+    map.set(day, { day, ahorro: 0, antojo: 0, necesidad: 0, total: 0 })
   }
 
   for (const item of monthData.value) {
@@ -116,11 +116,16 @@ const dailyChart = computed(() => {
     if (!dayItem) {
       continue
     }
-    const amount = toAmount(item)
+    const amount = Number(item.gasto || 0)
+
+    if (amount <= 0) {
+      continue
+    }
 
     if (item.tipo === 'Ahorro') dayItem.ahorro += amount
     if (item.tipo === 'Antojo') dayItem.antojo += amount
     if (item.tipo === 'Necesidad') dayItem.necesidad += amount
+    dayItem.total += amount
   }
 
   return [...map.values()].sort((a, b) => a.day - b.day)

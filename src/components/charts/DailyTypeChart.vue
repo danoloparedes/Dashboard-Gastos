@@ -15,9 +15,8 @@ const props = defineProps({
 const showAhorro = ref(true)
 
 const maxValue = computed(() => {
-  const values = props.data.flatMap((item) => {
-    const base = [item.antojo, item.necesidad]
-    return showAhorro.value ? [item.ahorro, ...base] : base
+  const values = props.data.map((item) => {
+    return showAhorro.value ? item.total : item.total - item.ahorro
   })
   return Math.max(1, ...values)
 })
@@ -93,21 +92,23 @@ const tooltipText = computed(() => {
 
         <div class="daily-scroller" :style="{ gridTemplateColumns: `repeat(${Math.max(data.length, 1)}, minmax(0, 1fr))` }">
           <div v-for="day in data" :key="day.day" class="day-col">
-            <div class="grouped-bars">
+            <div v-if="day.total > 0" class="stacked-bars">
               <div
-                v-if="showAhorro"
+                v-if="showAhorro && day.ahorro > 0"
                 class="bar ahorro"
                 :style="{ height: height(day.ahorro) }"
                 @mouseenter="setHover(day.day, 'Ahorro', day.ahorro)"
                 @mouseleave="clearHover"
               />
               <div
+                v-if="day.antojo > 0"
                 class="bar antojo"
                 :style="{ height: height(day.antojo) }"
                 @mouseenter="setHover(day.day, 'Antojo', day.antojo)"
                 @mouseleave="clearHover"
               />
               <div
+                v-if="day.necesidad > 0"
                 class="bar necesidad"
                 :style="{ height: height(day.necesidad) }"
                 @mouseenter="setHover(day.day, 'Necesidad', day.necesidad)"
@@ -215,18 +216,21 @@ const tooltipText = computed(() => {
   font-size: 0.75rem;
 }
 
-.grouped-bars {
+.stacked-bars {
   height: 180px;
   width: 100%;
   display: flex;
-  align-items: end;
-  gap: 2px;
+  flex-direction: column-reverse;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #f4efe4;
 }
 
 .bar {
-  flex: 1;
-  min-height: 2px;
-  border-radius: 2px 2px 0 0;
+  width: 100%;
 }
 
 .bar.ahorro {
