@@ -95,21 +95,21 @@ const tooltipText = computed(() => {
             <div v-if="day.total > 0" class="stacked-bars">
               <div
                 v-if="showAhorro && day.ahorro > 0"
-                class="bar ahorro"
+                class="daily-segment ahorro"
                 :style="{ height: height(day.ahorro) }"
                 @mouseenter="setHover(day.day, 'Ahorro', day.ahorro)"
                 @mouseleave="clearHover"
               />
               <div
                 v-if="day.antojo > 0"
-                class="bar antojo"
+                class="daily-segment antojo"
                 :style="{ height: height(day.antojo) }"
                 @mouseenter="setHover(day.day, 'Antojo', day.antojo)"
                 @mouseleave="clearHover"
               />
               <div
                 v-if="day.necesidad > 0"
-                class="bar necesidad"
+                class="daily-segment necesidad"
                 :style="{ height: height(day.necesidad) }"
                 @mouseenter="setHover(day.day, 'Necesidad', day.necesidad)"
                 @mouseleave="clearHover"
@@ -229,19 +229,20 @@ const tooltipText = computed(() => {
   background: #f4efe4;
 }
 
-.bar {
+.daily-segment {
+  flex: 0 0 auto;
   width: 100%;
 }
 
-.bar.ahorro {
+.daily-segment.ahorro {
   background: var(--yellow);
 }
 
-.bar.antojo {
+.daily-segment.antojo {
   background: var(--red);
 }
 
-.bar.necesidad {
+.daily-segment.necesidad {
   background: var(--blue);
 }
 
