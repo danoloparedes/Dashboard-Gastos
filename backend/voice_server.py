@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import cgi
 import json
 import os
+import re
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -58,23 +58,60 @@ class Handler(BaseHTTPRequestHandler):
     return json.loads(raw.decode('utf-8'))
 
   def _parse_multipart(self) -> tuple[bytes, str, str]:
-    form = cgi.FieldStorage(
-      fp=self.rfile,
-      headers=self.headers,
-      environ={
-        'REQUEST_METHOD': 'POST',
-        'CONTENT_TYPE': self.headers.get('Content-Type', ''),
-      },
-    )
+    content_type = self.headers.get('Content-Type', '')
+    length = int(self.headers.get('Content-Length', '0') or 0)
+    body = self.rfile.read(length) if length > 0 else b''
 
-    file_item = form['audio'] if 'audio' in form else None
-    text_override = form.getfirst('text_override', '')
+    boundary_match = re.search(r'boundary=(?:"([^"]+)"|([^;]+))', content_type)
+    if not boundary_match:
+      raise RuntimeError('multipart/form-data invalido: boundary no encontrado.')
 
-    if file_item is None or not getattr(file_item, 'file', None):
-      return b'', 'audio.webm', text_override
+    boundary = (boundary_match.group(1) or boundary_match.group(2) or '').strip().encode('utf-8')
+    if not boundary:
+      raise RuntimeError('multipart/form-data invalido: boundary vacio.')
 
-    filename = getattr(file_item, 'filename', 'audio.webm') or 'audio.webm'
-    audio_bytes = file_item.file.read()
+    delimiter = b'--' + boundary
+    parts = body.split(delimiter)
+
+    audio_bytes = b''
+    filename = 'audio.webm'
+    text_override = ''
+
+    for raw_part in parts:
+      part = raw_part.strip()
+      if not part or part == b'--':
+        continue
+
+      if b'\r\n\r\n' not in part:
+        continue
+
+      header_bytes, payload = part.split(b'\r\n\r\n', 1)
+      payload = payload.rstrip(b'\r\n')
+
+      headers: dict[str, str] = {}
+      for line in header_bytes.split(b'\r\n'):
+        if b':' not in line:
+          continue
+        key, value = line.split(b':', 1)
+        headers[key.decode('utf-8', errors='ignore').strip().lower()] = value.decode(
+          'utf-8', errors='ignore'
+        ).strip()
+
+      disposition = headers.get('content-disposition', '')
+      name_match = re.search(r'name="([^"]+)"', disposition)
+      filename_match = re.search(r'filename="([^"]*)"', disposition)
+
+      field_name = name_match.group(1) if name_match else ''
+
+      if field_name == 'text_override':
+        text_override = payload.decode('utf-8', errors='ignore').strip()
+        continue
+
+      if field_name == 'audio':
+        audio_bytes = payload
+        if filename_match and filename_match.group(1).strip():
+          filename = filename_match.group(1).strip()
+
     return audio_bytes, filename, text_override
 
   def do_POST(self) -> None:
