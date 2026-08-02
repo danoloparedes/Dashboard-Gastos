@@ -27,6 +27,10 @@ fi
 echo "$LOG_PREFIX Validando Nginx..."
 sudo nginx -t
 
+if [ -f "$REPO_DIR/scripts/setup_https_local_pi.sh" ]; then
+  chmod +x "$REPO_DIR/scripts/setup_https_local_pi.sh"
+fi
+
 echo "$LOG_PREFIX Recargando systemd y habilitando servicios..."
 sudo systemctl daemon-reload
 sudo systemctl enable dashboard-api
@@ -41,6 +45,8 @@ sudo systemctl restart dashboard-voice-api
 sudo systemctl reload nginx
 
 echo "$LOG_PREFIX OK. Setup unico completado."
+echo "$LOG_PREFIX Siguiente paso recomendado para microfono en celular:"
+echo "$LOG_PREFIX   $REPO_DIR/scripts/setup_https_local_pi.sh"
 echo "$LOG_PREFIX Estado rapido:"
 sudo systemctl --no-pager --full status dashboard-startup | sed -n '1,8p'
 sudo systemctl --no-pager --full status dashboard-api | sed -n '1,8p'

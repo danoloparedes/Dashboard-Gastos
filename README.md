@@ -180,6 +180,29 @@ Importante para grabacion en celular:
 - Si abres por `http://IP:puerto`, muchos navegadores bloquean microfono.
 - La vista de captura incluye fallback para subir audio (`input file`) cuando no hay soporte de grabacion directa.
 
+### Habilitar HTTPS local en Raspberry (para microfono movil)
+
+Se incluye un script para crear certificado local y activar TLS en Nginx:
+
+```bash
+cd /home/pi/dashboard-gastos
+chmod +x scripts/setup_https_local_pi.sh
+./scripts/setup_https_local_pi.sh
+```
+
+Luego abre en celular:
+
+```text
+https://IP_DE_TU_RASPBERRY
+```
+
+Como el certificado es local (self-signed), debes confiarlo en el celular para
+evitar bloqueos de permisos de microfono:
+
+1. Exporta/copia el certificado `dashboard-gastos.crt` al telefono.
+2. Instala el certificado CA/usuario desde ajustes de seguridad del telefono.
+3. Vuelve a abrir la URL HTTPS y acepta permisos de microfono.
+
 ### Si aparece error 502
 
 Normalmente significa que Vite no pudo llegar a la API. Solucion rapida:
