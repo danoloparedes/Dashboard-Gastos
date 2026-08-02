@@ -133,6 +133,21 @@ select {
   font-weight: 700;
 }
 
+.capture-stage-grid {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.capture-stage {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f8f4e9;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #344054;
+}
+
 .capture-error,
 .capture-ok {
   border-radius: 10px;

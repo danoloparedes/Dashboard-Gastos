@@ -87,6 +87,72 @@ export async function processVoiceAudio(audioBlob) {
   return payload.result || {}
 }
 
+export async function transcribeVoiceAudio(audioBlob) {
+  const form = new FormData()
+  form.append('audio', audioBlob, 'voice.webm')
+
+  const response = await fetchWithTimeout(
+    `${VOICE_API_BASE}/transcribe`,
+    {
+      method: 'POST',
+      body: form
+    },
+    VOICE_TIMEOUT_MS
+  )
+
+  if (!response.ok) {
+    const payload = await safeJson(response)
+    throw new Error(payload?.error || `Error transcribiendo audio (${response.status})`)
+  }
+
+  const payload = await response.json()
+  return payload.result || {}
+}
+
+export async function transcribeVoiceText(text) {
+  const response = await fetchWithTimeout(
+    `${VOICE_API_BASE}/transcribe`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ text_override: text })
+    },
+    VOICE_TIMEOUT_MS
+  )
+
+  if (!response.ok) {
+    const payload = await safeJson(response)
+    throw new Error(payload?.error || `Error transcribiendo texto (${response.status})`)
+  }
+
+  const payload = await response.json()
+  return payload.result || {}
+}
+
+export async function interpretVoiceTranscript(transcript) {
+  const response = await fetchWithTimeout(
+    `${VOICE_API_BASE}/interpret`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ transcript })
+    },
+    VOICE_TIMEOUT_MS
+  )
+
+  if (!response.ok) {
+    const payload = await safeJson(response)
+    throw new Error(payload?.error || `Error interpretando texto (${response.status})`)
+  }
+
+  const payload = await response.json()
+  return payload.result || {}
+}
+
 export async function processVoiceText(text) {
   const response = await fetchWithTimeout(
     `${VOICE_API_BASE}/process`,

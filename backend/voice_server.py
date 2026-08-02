@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
-from voice_pipeline import process_audio_to_draft, save_draft
+from voice_pipeline import interpret_text_to_draft, process_audio_to_draft, save_draft, transcribe_audio_to_text
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / '.env')
@@ -116,6 +116,37 @@ class Handler(BaseHTTPRequestHandler):
 
   def do_POST(self) -> None:
     parsed = urlparse(self.path)
+
+    if parsed.path == '/api/voice/transcribe':
+      try:
+        content_type = self.headers.get('Content-Type', '')
+
+        if 'multipart/form-data' in content_type:
+          audio_bytes, filename, text_override = self._parse_multipart()
+          result = transcribe_audio_to_text(audio_bytes, filename, text_override=text_override)
+        else:
+          payload = self._read_json()
+          text_override = str(payload.get('text_override', '')).strip()
+          if not text_override:
+            raise RuntimeError('Debes enviar multipart con audio o JSON con text_override.')
+          result = transcribe_audio_to_text(b'', 'text.txt', text_override=text_override)
+
+        self._send_json({'ok': True, 'result': result})
+      except Exception as exc:  # pragma: no cover
+        self._send_json({'ok': False, 'error': str(exc)}, status=500)
+      return
+
+    if parsed.path == '/api/voice/interpret':
+      try:
+        payload = self._read_json()
+        transcript = str(payload.get('transcript', '')).strip()
+        if not transcript:
+          raise RuntimeError('Debes enviar transcript en el body JSON.')
+        result = interpret_text_to_draft(transcript)
+        self._send_json({'ok': True, 'result': result})
+      except Exception as exc:  # pragma: no cover
+        self._send_json({'ok': False, 'error': str(exc)}, status=500)
+      return
 
     if parsed.path == '/api/voice/process':
       try:

@@ -1,6 +1,11 @@
 <script setup>
 import { computed, onUnmounted, ref } from 'vue'
-import { processVoiceAudio, processVoiceText, saveVoiceDraft } from '../services/api'
+import {
+  interpretVoiceTranscript,
+  saveVoiceDraft,
+  transcribeVoiceAudio,
+  transcribeVoiceText
+} from '../services/api'
 
 defineEmits(['go-home'])
 
@@ -10,6 +15,8 @@ const processing = ref(false)
 const saving = ref(false)
 const saveTarget = ref('sqlite')
 const transcript = ref('')
+const transcriptionMeta = ref(null)
+const interpretationMeta = ref(null)
 const draft = ref({
   fecha: new Date().toISOString().slice(0, 10),
   descripcion: '',
@@ -72,6 +79,8 @@ const onAudioFileSelected = (event) => {
 const startRecording = async () => {
   error.value = ''
   savedMessage.value = ''
+  transcriptionMeta.value = null
+  interpretationMeta.value = null
 
   if (!isSecureContextOk.value) {
     error.value = 'Grabacion bloqueada: abre esta app en HTTPS o desde localhost.'
@@ -119,7 +128,7 @@ const stopRecording = () => {
   isRecording.value = false
 }
 
-const processAudio = async () => {
+const transcribeAudio = async () => {
   if (!audioBlob.value) {
     error.value = 'Primero graba un audio o usa texto manual.'
     return
@@ -128,43 +137,79 @@ const processAudio = async () => {
   processing.value = true
   error.value = ''
   savedMessage.value = ''
-  status.value = 'Procesando audio con Whisper/Ollama...'
+  status.value = 'Transcribiendo audio con Whisper...'
 
   try {
-    const result = await processVoiceAudio(audioBlob.value)
+    const result = await transcribeVoiceAudio(audioBlob.value)
     transcript.value = result.transcript || ''
-    updateDraft(result.draft || {})
+    transcriptionMeta.value = result?.meta || null
+    interpretationMeta.value = null
     const engine = result?.meta?.transcription_engine || 'desconocido'
     const elapsed = result?.meta?.elapsed_ms
     status.value =
       typeof elapsed === 'number'
-        ? `Texto interpretado (${engine}, ${elapsed} ms). Revisa y confirma el gasto.`
-        : `Texto interpretado (${engine}). Revisa y confirma el gasto.`
+        ? `Transcripcion lista (${engine}, ${elapsed} ms). Ahora interpreta el texto.`
+        : `Transcripcion lista (${engine}). Ahora interpreta el texto.`
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'No se pudo procesar el audio.'
+    error.value = err instanceof Error ? err.message : 'No se pudo transcribir el audio.'
   } finally {
     processing.value = false
   }
 }
 
-const processManualText = async () => {
+const interpretText = async () => {
   if (!transcript.value.trim()) {
-    error.value = 'Escribe texto manual para procesar.'
+    error.value = 'No hay texto para interpretar.'
     return
   }
 
   processing.value = true
   error.value = ''
   savedMessage.value = ''
-  status.value = 'Interpretando texto manual...'
+  status.value = 'Interpretando texto con Ollama/parser...'
 
   try {
-    const result = await processVoiceText(transcript.value.trim())
-    transcript.value = result.transcript || transcript.value
+    const result = await interpretVoiceTranscript(transcript.value.trim())
     updateDraft(result.draft || {})
-    status.value = 'Texto interpretado. Revisa y confirma el gasto.'
+    interpretationMeta.value = result?.meta || null
+    const engine = result?.meta?.interpretation_engine || 'desconocido'
+    const elapsed = result?.meta?.elapsed_ms
+    status.value =
+      typeof elapsed === 'number'
+        ? `Interpretacion lista (${engine}, ${elapsed} ms). Revisa y confirma el gasto.`
+        : `Interpretacion lista (${engine}). Revisa y confirma el gasto.`
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'No se pudo procesar el texto.'
+    error.value = err instanceof Error ? err.message : 'No se pudo interpretar el texto.'
+  } finally {
+    processing.value = false
+  }
+}
+
+const transcribeManualText = async () => {
+  if (!transcript.value.trim()) {
+    error.value = 'Escribe texto para simular la etapa de transcripcion.'
+    return
+  }
+
+  processing.value = true
+  error.value = ''
+  savedMessage.value = ''
+  status.value = 'Registrando texto manual como transcripcion...'
+
+  try {
+    const result = await transcribeVoiceText(transcript.value.trim())
+    transcript.value = result.transcript || transcript.value
+    transcriptionMeta.value = result?.meta || { transcription_engine: 'text-override' }
+    if (!transcriptionMeta.value?.elapsed_ms) {
+      transcriptionMeta.value = {
+        ...(transcriptionMeta.value || {}),
+        elapsed_ms: 0,
+        transcription_engine: transcriptionMeta.value?.transcription_engine || 'text-override'
+      }
+    }
+    status.value = 'Texto manual listo como transcripcion. Ahora interpreta el texto.'
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'No se pudo registrar el texto manual.'
   } finally {
     processing.value = false
   }
@@ -209,8 +254,8 @@ onUnmounted(() => {
         <button class="btn-secondary" :disabled="!isRecording" @click="stopRecording">
           Detener
         </button>
-        <button class="btn-secondary" :disabled="!audioBlob || processing" @click="processAudio">
-          Procesar audio
+        <button class="btn-secondary" :disabled="!audioBlob || processing" @click="transcribeAudio">
+          1) Transcribir audio
         </button>
       </div>
 
@@ -234,9 +279,24 @@ onUnmounted(() => {
         />
       </label>
 
-      <button class="btn-secondary" :disabled="processing" @click="processManualText">
-        Interpretar texto manual
+      <button class="btn-secondary" :disabled="processing" @click="transcribeManualText">
+        1) Usar texto manual como transcripcion
       </button>
+
+      <button class="btn-secondary" :disabled="processing || !transcript.trim()" @click="interpretText">
+        2) Interpretar texto
+      </button>
+
+      <div class="capture-stage-grid">
+        <p class="capture-stage" v-if="transcriptionMeta">
+          Whisper: {{ transcriptionMeta.transcription_engine || 'desconocido' }} -
+          {{ transcriptionMeta.elapsed_ms ?? '-' }} ms
+        </p>
+        <p class="capture-stage" v-if="interpretationMeta">
+          Interpretacion: {{ interpretationMeta.interpretation_engine || 'desconocido' }} -
+          {{ interpretationMeta.elapsed_ms ?? '-' }} ms
+        </p>
+      </div>
 
       <div class="capture-grid">
         <label>

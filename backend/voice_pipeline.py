@@ -396,7 +396,37 @@ def save_to_google_sheets(draft: dict) -> dict:
 
 def process_audio_to_draft(audio_bytes: bytes, filename: str, text_override: str = '') -> dict:
   started = time.perf_counter()
+  transcribed = transcribe_audio_to_text(audio_bytes, filename, text_override=text_override)
+  interpreted = interpret_text_to_draft(transcribed['transcript'])
+  elapsed_ms = int((time.perf_counter() - started) * 1000)
+
+  return {
+    'transcript': transcribed['transcript'],
+    'draft': interpreted['draft'],
+    'meta': {
+      'elapsed_ms': elapsed_ms,
+      'transcription': transcribed['meta'],
+      'interpretation': interpreted['meta'],
+    },
+  }
+
+
+def transcribe_audio_to_text(audio_bytes: bytes, filename: str, text_override: str = '') -> dict:
+  started = time.perf_counter()
   transcript, transcription_engine = transcribe_audio(audio_bytes, filename, text_override=text_override)
+  elapsed_ms = int((time.perf_counter() - started) * 1000)
+
+  return {
+    'transcript': transcript,
+    'meta': {
+      'transcription_engine': transcription_engine,
+      'elapsed_ms': elapsed_ms,
+    },
+  }
+
+
+def interpret_text_to_draft(transcript: str) -> dict:
+  started = time.perf_counter()
   raw_draft = interpret_expense_text(transcript)
   draft = normalize_draft(raw_draft)
   elapsed_ms = int((time.perf_counter() - started) * 1000)
@@ -406,7 +436,6 @@ def process_audio_to_draft(audio_bytes: bytes, filename: str, text_override: str
     'transcript': transcript,
     'draft': draft,
     'meta': {
-      'transcription_engine': transcription_engine,
       'interpretation_engine': ollama_model if ollama_model else 'heuristic-parser',
       'elapsed_ms': elapsed_ms,
     },
