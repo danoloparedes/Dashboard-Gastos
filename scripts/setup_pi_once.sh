@@ -3,6 +3,8 @@ set -euo pipefail
 
 REPO_DIR="/home/pi/dashboard-gastos"
 LOG_PREFIX="[dashboard-setup-once]"
+CERT_FILE="/etc/ssl/localcerts/dashboard-gastos.crt"
+KEY_FILE="/etc/ssl/localcerts/dashboard-gastos.key"
 
 echo "$LOG_PREFIX Iniciando setup unico de Raspberry..."
 
@@ -22,6 +24,17 @@ sudo ln -sf /etc/nginx/sites-available/dashboard-gastos /etc/nginx/sites-enabled
 
 if [ -f /etc/nginx/sites-enabled/default ]; then
   sudo rm -f /etc/nginx/sites-enabled/default
+fi
+
+if [ ! -f "$CERT_FILE" ] || [ ! -f "$KEY_FILE" ]; then
+  echo "$LOG_PREFIX No existe certificado HTTPS local. Generando certificado..."
+  if [ -f "$REPO_DIR/scripts/setup_https_local_pi.sh" ]; then
+    chmod +x "$REPO_DIR/scripts/setup_https_local_pi.sh"
+    "$REPO_DIR/scripts/setup_https_local_pi.sh"
+  else
+    echo "$LOG_PREFIX ERROR: No existe script HTTPS en $REPO_DIR/scripts/setup_https_local_pi.sh"
+    exit 1
+  fi
 fi
 
 echo "$LOG_PREFIX Validando Nginx..."
