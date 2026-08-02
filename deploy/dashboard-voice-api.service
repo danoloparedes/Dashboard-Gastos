@@ -1,0 +1,16 @@
+[Unit]
+Description=Dashboard gastos voice API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/dashboard-gastos/backend
+EnvironmentFile=/home/pi/dashboard-gastos/backend/.env
+ExecStart=/home/pi/dashboard-gastos/.venv/bin/python /home/pi/dashboard-gastos/backend/voice_server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

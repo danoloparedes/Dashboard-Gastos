@@ -50,6 +50,9 @@ npm run build
 - `src/data/transactions.js`: constantes y utilidades
 - `src/services/api.js`: cliente frontend para la API
 - `backend/api_server.py`: API local que lee SQLite
+- `src/pages/VoiceCapturePage.vue`: captura y confirmacion de gastos por voz
+- `backend/voice_server.py`: API de voz (proceso paralelo en puerto 8001)
+- `backend/voice_pipeline.py`: transcripcion, interpretacion y guardado (SQLite/Sheets)
 
 ## Backend recomendado para tu caso
 
@@ -113,7 +116,69 @@ npm run dev -- --host
 Notas:
 
 - Endpoint de datos: `GET /api/transactions`
+- Endpoint voz: `POST /api/voice/process` y `POST /api/voice/save`
 - El frontend ya no usa mock de transacciones.
+
+## Registro de gastos por voz (PWA)
+
+La app ahora incluye una vista movil para capturar gastos por voz:
+
+- Ruta: `/#/capture`
+- En landing: boton **Registrar gasto por voz**
+- Flujo: grabar audio -> transcribir -> interpretar a columnas -> editar -> guardar
+
+### Backend de voz separado (recomendado)
+
+El servicio de voz corre en paralelo al dashboard:
+
+- Dashboard API: `http://127.0.0.1:8000`
+- Voice API: `http://127.0.0.1:8001`
+
+En desarrollo, Vite hace proxy automatico de `/api/voice` al puerto 8001.
+
+### Variables para voz (`backend/.env`)
+
+Revisa `backend/.env.example` y define:
+
+- `VOICE_API_HOST`, `VOICE_API_PORT`
+- `VOICE_WHISPER_MODE`: `mock` o `faster-whisper`
+- `VOICE_WHISPER_MODEL`, `VOICE_WHISPER_COMPUTE_TYPE`
+- `VOICE_OLLAMA_MODEL` (opcional, si quieres parse con Ollama)
+- `VOICE_OLLAMA_URL`
+
+Si `VOICE_OLLAMA_MODEL` queda vacio, se usa parser heuristico local.
+
+### Activar Whisper real para pruebas
+
+1. Instala dependencias backend (incluye `faster-whisper`):
+
+```bash
+cd backend
+pip install -r requirements.txt
+```
+
+2. En `backend/.env`, deja:
+
+```env
+VOICE_WHISPER_MODE=faster-whisper
+VOICE_WHISPER_MODEL=small
+VOICE_WHISPER_COMPUTE_TYPE=int8
+```
+
+3. Reinicia `voice_server.py`.
+
+4. Al procesar audio, la respuesta devuelve `meta.transcription_engine` y `meta.elapsed_ms` para validar motor y tiempo.
+
+### Instalable en celular (PWA)
+
+Se agrego `public/manifest.webmanifest` y `public/sw.js`.
+Desde el navegador del telefono puedes usar **Agregar a pantalla de inicio**.
+
+Importante para grabacion en celular:
+
+- `getUserMedia` requiere contexto seguro (HTTPS o localhost).
+- Si abres por `http://IP:puerto`, muchos navegadores bloquean microfono.
+- La vista de captura incluye fallback para subir audio (`input file`) cuando no hay soporte de grabacion directa.
 
 ### Si aparece error 502
 
@@ -174,6 +239,24 @@ Si subes este proyecto a GitHub y quieres que la Raspberry se actualice sola al 
 
 - `scripts/run_dashboard_pi.sh`: hace pull, instala deps, build, sync y reinicia servicios
 - `deploy/dashboard-startup.service`: servicio systemd para ejecutar el script en cada reinicio
+- `scripts/setup_pi_once.sh`: setup unico para Raspberry ya existente
+- `deploy/dashboard-api.service`: servicio systemd para API principal (puerto 8000)
+- `deploy/dashboard-voice-api.service`: servicio systemd para la API de voz
+- `deploy/dashboard-gastos.nginx.conf`: sitio Nginx para frontend + proxy `/api` y `/api/voice`
+
+### Si tu Raspberry ya estaba montada y hace pull automatico
+
+Si ya tienes el repo en `/home/pi/dashboard-gastos` y solo quieres adaptar a esta version,
+haces esto una sola vez:
+
+```bash
+cd /home/pi/dashboard-gastos
+chmod +x scripts/setup_pi_once.sh scripts/run_dashboard_pi.sh
+./scripts/setup_pi_once.sh
+```
+
+Desde ahi en adelante, el flujo normal queda igual: `dashboard-startup` ejecuta
+`run_dashboard_pi.sh`, hace `git pull`, build, sync y reinicia servicios.
 
 ### Setup en Raspberry (una sola vez)
 
@@ -195,7 +278,11 @@ sudo systemctl enable dashboard-startup.service
 
 ```bash
 sudo systemctl enable nginx
+sudo cp /home/pi/dashboard-gastos/deploy/dashboard-api.service /etc/systemd/system/dashboard-api.service
 sudo systemctl enable dashboard-api
+sudo cp /home/pi/dashboard-gastos/deploy/dashboard-voice-api.service /etc/systemd/system/dashboard-voice-api.service
+sudo systemctl daemon-reload
+sudo systemctl enable dashboard-voice-api
 ```
 
 4. Probar ejecucion manual:
@@ -217,4 +304,4 @@ Con esto, en cada encendido/reinicio:
 2. Actualiza backend y frontend
 3. Ejecuta sync Google Sheets -> SQLite
 4. Publica `dist/` en `/var/www/dashboard-gastos`
-5. Reinicia API y recarga Nginx
+5. Reinicia API dashboard + API voz y recarga Nginx

@@ -1,5 +1,5 @@
 <script setup>
-defineEmits(['go-dashboard'])
+defineEmits(['go-dashboard', 'go-capture'])
 </script>
 
 <template>
@@ -13,6 +13,7 @@ defineEmits(['go-dashboard'])
       </p>
       <div class="cta-row">
         <button class="btn-primary" @click="$emit('go-dashboard')">Ver dashboard</button>
+        <button class="btn-secondary" @click="$emit('go-capture')">Registrar gasto por voz</button>
       </div>
     </section>
 

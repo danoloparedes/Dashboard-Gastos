@@ -30,6 +30,16 @@ if defined API_PID (
   taskkill /PID %API_PID% /F >nul 2>&1
 )
 
+set "VOICE_PID="
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr /R /C:":8001 .*LISTENING"') do (
+  set "VOICE_PID=%%p"
+)
+if defined VOICE_PID (
+  echo [WARN] Puerto 8001 en uso por PID %VOICE_PID%.
+  echo [WARN] Cerrando proceso previo para reiniciar Voice API limpia...
+  taskkill /PID %VOICE_PID% /F >nul 2>&1
+)
+
 echo ================================================
 echo 1^/3 Sincronizando Google Sheets ^> SQLite...
 echo ================================================
@@ -45,7 +55,7 @@ popd
 
 echo.
 echo ================================================
-echo 2^/3 Levantando backend API en nueva ventana...
+echo 2^/4 Levantando backend API en nueva ventana...
 echo ================================================
 start "Dashboard Backend API" /D "%ROOT%backend" cmd /k ""%PY%" api_server.py"
 
@@ -60,7 +70,22 @@ if errorlevel 1 (
 
 echo.
 echo ================================================
-echo 3^/3 Levantando frontend Vite en nueva ventana...
+echo 3^/4 Levantando Voice API en nueva ventana...
+echo ================================================
+start "Dashboard Voice API" /D "%ROOT%backend" cmd /k ""%PY%" voice_server.py"
+
+echo Esperando Voice API en http://127.0.0.1:8001/health ...
+powershell -NoProfile -Command "for($i=0; $i -lt 20; $i++){ try { Invoke-WebRequest -Uri 'http://127.0.0.1:8001/health' -UseBasicParsing -TimeoutSec 1 ^| Out-Null; exit 0 } catch { Start-Sleep -Milliseconds 500 } }; exit 1"
+if errorlevel 1 (
+  echo [WARN] La Voice API no respondio a tiempo.
+  echo [WARN] Revisa la ventana "Dashboard Voice API" para ver el error exacto.
+) else (
+  echo [OK] Voice API levantada correctamente.
+)
+
+echo.
+echo ================================================
+echo 4^/4 Levantando frontend Vite en nueva ventana...
 echo ================================================
 start "Dashboard Frontend" /D "%ROOT%" cmd /k "npm.cmd run dev -- --host"
 
@@ -68,6 +93,7 @@ echo.
 echo [OK] Todo lanzado.
 echo Frontend: http://localhost:5173
 echo API:      http://127.0.0.1:8000/health
+echo Voice:    http://127.0.0.1:8001/health
 
 echo Puedes cerrar esta ventana; backend y frontend quedan en sus ventanas.
 endlocal

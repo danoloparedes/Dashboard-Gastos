@@ -60,6 +60,105 @@ select {
   padding: 2.2rem 0 2.8rem;
 }
 
+.capture-wrap {
+  width: min(760px, 94vw);
+  margin: 0 auto;
+  padding: 1.4rem 0 2.4rem;
+}
+
+.capture-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.capture-header h1 {
+  font-size: clamp(1.35rem, 3vw, 1.8rem);
+}
+
+.capture-card {
+  margin-top: 0.8rem;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 1rem;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.capture-status {
+  font-weight: 700;
+  color: #115667;
+}
+
+.capture-actions {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.capture-player {
+  width: 100%;
+}
+
+.capture-field {
+  display: grid;
+  gap: 0.3rem;
+  font-weight: 700;
+}
+
+.capture-field input,
+.capture-field textarea,
+.capture-field select,
+.capture-grid input,
+.capture-grid select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.55rem 0.6rem;
+}
+
+.capture-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.7rem;
+}
+
+.capture-grid label {
+  display: grid;
+  gap: 0.3rem;
+  font-weight: 700;
+}
+
+.capture-error,
+.capture-ok {
+  border-radius: 10px;
+  padding: 0.58rem 0.7rem;
+  font-weight: 700;
+}
+
+.capture-note {
+  font-size: 0.84rem;
+  color: var(--muted);
+  background: #f4efe4;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 0.5rem 0.65rem;
+}
+
+.capture-error {
+  color: #b42318;
+  background: #fdeceb;
+}
+
+.capture-ok {
+  color: #065f46;
+  background: #ddfbe9;
+}
+
 .landing-wrap {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;
@@ -572,5 +671,9 @@ th:last-child {
 
   .bars-wrap {
     grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .capture-grid {
+    grid-template-columns: 1fr;
   }
 }

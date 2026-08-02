@@ -40,7 +40,22 @@ find /var/www/dashboard-gastos -type d -exec chmod 755 {} \;
 find /var/www/dashboard-gastos -type f -exec chmod 644 {} \;
 
 echo "$LOG_PREFIX Reiniciando servicios..."
-systemctl restart dashboard-api
-systemctl reload nginx
+if systemctl list-unit-files | grep -q '^dashboard-api.service'; then
+  systemctl restart dashboard-api
+else
+  echo "$LOG_PREFIX WARN: dashboard-api.service no existe. Saltando reinicio API principal."
+fi
+
+if systemctl list-unit-files | grep -q '^dashboard-voice-api.service'; then
+  systemctl restart dashboard-voice-api
+else
+  echo "$LOG_PREFIX WARN: dashboard-voice-api.service no existe. Saltando reinicio Voice API."
+fi
+
+if systemctl list-unit-files | grep -q '^nginx.service'; then
+  systemctl reload nginx
+else
+  echo "$LOG_PREFIX WARN: nginx.service no existe. Saltando recarga web."
+fi
 
 echo "$LOG_PREFIX OK: dashboard actualizado y levantado."
