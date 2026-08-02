@@ -38,8 +38,11 @@ OU = HomeLab
 CN = $IP_VALUE
 
 [v3_req]
-keyUsage = keyEncipherment, dataEncipherment
+basicConstraints = critical, CA:FALSE
+keyUsage = critical, digitalSignature, keyEncipherment
 extendedKeyUsage = serverAuth
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer
 subjectAltName = @alt_names
 
 [alt_names]
