@@ -11,12 +11,26 @@ import uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib import error, request
+from typing import TYPE_CHECKING, Any
 
 import gspread
 from dotenv import load_dotenv
 
+try:
+  from faster_whisper import WhisperModel
+except Exception:  # pragma: no cover
+  WhisperModel = None  # type: ignore[assignment]
+
+if TYPE_CHECKING:
+  from faster_whisper import WhisperModel as WhisperModelType
+else:
+  WhisperModelType = Any
+
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / '.env')
+
+_whisper_model: WhisperModelType | None = None
+_whisper_model_size: str | None = None
 
 
 def _resolve_db_path() -> str:
@@ -39,6 +53,36 @@ def _resolve_credentials_path() -> Path:
       credentials_path = alt_path
 
   return credentials_path
+
+
+def load_whisper() -> None:
+  global _whisper_model, _whisper_model_size
+
+  if WhisperModel is None:
+    raise RuntimeError('faster-whisper no esta instalado.')
+
+  model_size = os.getenv('VOICE_WHISPER_MODEL', 'base').strip() or 'base'
+  compute_type = os.getenv('VOICE_WHISPER_COMPUTE_TYPE', 'int8').strip() or 'int8'
+
+  if _whisper_model is not None and _whisper_model_size == model_size:
+    return
+
+  _whisper_model_size = model_size
+  _whisper_model = WhisperModel(model_size, device='cpu', compute_type=compute_type)
+
+
+def _get_whisper_model() -> WhisperModelType:
+  if WhisperModel is None:
+    raise RuntimeError('faster-whisper no esta instalado.')
+
+  global _whisper_model
+  if _whisper_model is None:
+    load_whisper()
+
+  if _whisper_model is None:
+    raise RuntimeError('Whisper no pudo inicializarse.')
+
+  return _whisper_model
 
 
 def _normalize_text(value: str) -> str:
@@ -227,14 +271,7 @@ def transcribe_audio(audio_bytes: bytes, filename: str, text_override: str = '')
 
   try:
     if whisper_mode == 'faster-whisper':
-      try:
-        from faster_whisper import WhisperModel
-      except Exception as exc:  # pragma: no cover
-        raise RuntimeError('faster-whisper no esta instalado. Usa VOICE_WHISPER_MODE=mock o instala faster-whisper.') from exc
-
-      model_size = os.getenv('VOICE_WHISPER_MODEL', 'base')
-      compute_type = os.getenv('VOICE_WHISPER_COMPUTE_TYPE', 'int8')
-      model = WhisperModel(model_size, device='cpu', compute_type=compute_type)
+      model = _get_whisper_model()
       segments, _ = model.transcribe(str(temp_path), language='es')
       transcript = ' '.join(segment.text.strip() for segment in segments).strip()
       if not transcript:

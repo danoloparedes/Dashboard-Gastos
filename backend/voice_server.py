@@ -9,7 +9,13 @@ from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
-from voice_pipeline import interpret_text_to_draft, process_audio_to_draft, save_draft, transcribe_audio_to_text
+from voice_pipeline import (
+  interpret_text_to_draft,
+  load_whisper,
+  process_audio_to_draft,
+  save_draft,
+  transcribe_audio_to_text,
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / '.env')
@@ -182,6 +188,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
+  load_whisper()
   server = HTTPServer((HOST, PORT), Handler)
   print(f'Voice API running on http://{HOST}:{PORT}')
   server.serve_forever()

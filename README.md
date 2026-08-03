@@ -35,6 +35,38 @@ Frontend local:
 
 - http://localhost:5173
 
+### HTTPS local para microfono (notebook)
+
+Si quieres abrir desde celular dentro de la misma red y usar microfono, necesitas HTTPS.
+
+1. Instala `mkcert` en Windows (por ejemplo con Chocolatey):
+
+```bash
+choco install mkcert -y
+```
+
+2. Genera certificado local para Vite:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_local_https_windows.ps1
+```
+
+Opcional con IP manual:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_local_https_windows.ps1 -LocalIp "192.168.x.x"
+```
+
+3. Levanta `run_dashboard.bat` como siempre.
+
+Si existen `certs/dev-local-cert.pem` y `certs/dev-local-key.pem`, Vite usara HTTPS automaticamente.
+
+Notas:
+
+- URL local: `https://localhost:5173`
+- URL desde celular (misma WiFi): `https://IP_DE_TU_NOTEBOOK:5173`
+- Para que el celular confie el certificado, debes instalar la CA de `mkcert` en ese dispositivo.
+
 3. Compilar para produccion:
 
 ```bash
