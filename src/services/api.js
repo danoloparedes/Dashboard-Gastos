@@ -1,36 +1,44 @@
-const API_BASE = '/api'
-const VOICE_API_BASE = '/api/voice'
+const API_BASE = resolveApiBase(import.meta.env.VITE_DATA_API_URL, '/api')
+const VOICE_API_BASE = resolveApiBase(import.meta.env.VITE_VOICE_API_URL, '/api/voice')
 const REQUEST_TIMEOUT_MS = 8000
 const SYNC_TIMEOUT_MS = 90000
 const VOICE_TIMEOUT_MS = 120000
 
-function buildFallbackBase() {
-  const host = window.location.hostname || 'localhost'
-  return `http://${host}:8000/api`
+function resolveApiBase(configuredUrl, localPath) {
+  const value = configuredUrl?.trim().replace(/\/$/, '')
+  if (value) {
+    return value
+  }
+
+  return localPath
+}
+
+function dataApiUrl(path) {
+  return `${API_BASE}${path}`
+}
+
+function voiceApiUrl(path) {
+  if (!VOICE_API_BASE) {
+    throw new Error('El asistente de voz aun no esta configurado en este despliegue.')
+  }
+
+  return `${VOICE_API_BASE}${path}`
 }
 
 export async function fetchTransactions() {
-  const primary = await fetchWithTimeout(`${API_BASE}/transactions`)
+  const response = await fetchWithTimeout(dataApiUrl('/transactions'))
 
-  if (primary.ok) {
-    const payload = await primary.json()
+  if (response.ok) {
+    const payload = await response.json()
     return payload.transactions || []
   }
 
-  const fallbackUrl = `${buildFallbackBase()}/transactions`
-  const fallback = await fetchWithTimeout(fallbackUrl)
-
-  if (fallback.ok) {
-    const payload = await fallback.json()
-    return payload.transactions || []
-  }
-
-  throw new Error(`Error cargando transacciones (${primary.status})`)
+  throw new Error(`Error cargando transacciones (${response.status})`)
 }
 
 export async function triggerSync() {
-  const primary = await fetchWithTimeout(
-    `${API_BASE}/sync`,
+  const response = await fetchWithTimeout(
+    dataApiUrl('/sync'),
     {
       method: 'POST',
       headers: {
@@ -40,29 +48,12 @@ export async function triggerSync() {
     SYNC_TIMEOUT_MS
   )
 
-  if (primary.ok) {
-    const payload = await primary.json()
+  if (response.ok) {
+    const payload = await response.json()
     return payload.result || null
   }
 
-  const fallbackUrl = `${buildFallbackBase()}/sync`
-  const fallback = await fetchWithTimeout(
-    fallbackUrl,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    },
-    SYNC_TIMEOUT_MS
-  )
-
-  if (fallback.ok) {
-    const payload = await fallback.json()
-    return payload.result || null
-  }
-
-  throw new Error(`Error ejecutando sync (${primary.status})`)
+  throw new Error(`Error ejecutando sync (${response.status})`)
 }
 
 export async function processVoiceAudio(audioBlob) {
@@ -70,7 +61,7 @@ export async function processVoiceAudio(audioBlob) {
   form.append('audio', audioBlob, 'voice.webm')
 
   const response = await fetchWithTimeout(
-    `${VOICE_API_BASE}/process`,
+    voiceApiUrl('/process'),
     {
       method: 'POST',
       body: form
@@ -92,7 +83,7 @@ export async function transcribeVoiceAudio(audioBlob) {
   form.append('audio', audioBlob, 'voice.webm')
 
   const response = await fetchWithTimeout(
-    `${VOICE_API_BASE}/transcribe`,
+    voiceApiUrl('/transcribe'),
     {
       method: 'POST',
       body: form
@@ -111,7 +102,7 @@ export async function transcribeVoiceAudio(audioBlob) {
 
 export async function transcribeVoiceText(text) {
   const response = await fetchWithTimeout(
-    `${VOICE_API_BASE}/transcribe`,
+    voiceApiUrl('/transcribe'),
     {
       method: 'POST',
       headers: {
@@ -133,7 +124,7 @@ export async function transcribeVoiceText(text) {
 
 export async function interpretVoiceTranscript(transcript) {
   const response = await fetchWithTimeout(
-    `${VOICE_API_BASE}/interpret`,
+    voiceApiUrl('/interpret'),
     {
       method: 'POST',
       headers: {
@@ -155,7 +146,7 @@ export async function interpretVoiceTranscript(transcript) {
 
 export async function processVoiceText(text) {
   const response = await fetchWithTimeout(
-    `${VOICE_API_BASE}/process`,
+    voiceApiUrl('/process'),
     {
       method: 'POST',
       headers: {
@@ -177,7 +168,7 @@ export async function processVoiceText(text) {
 
 export async function saveVoiceDraft(draft, persistTarget = 'sqlite') {
   const response = await fetchWithTimeout(
-    `${VOICE_API_BASE}/save`,
+    voiceApiUrl('/save'),
     {
       method: 'POST',
       headers: {

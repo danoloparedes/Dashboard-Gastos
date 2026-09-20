@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import basicSsl from '@vitejs/plugin-basic-ssl'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -18,15 +17,10 @@ const httpsConfig = hasLocalHttpsCert
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [
-    vue(),
-    basicSsl({
-      name: 'dashboard-gastos-dev'
-    })
-  ],
+  plugins: [vue()],
   server: {
     host: true,
-    https: hasLocalHttpsCert ? httpsConfig : true,
+    https: httpsConfig,
     proxy: {
       '/api/voice': {
         target: 'http://127.0.0.1:8001',

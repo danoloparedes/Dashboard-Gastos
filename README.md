@@ -5,6 +5,45 @@ Proyecto Vue para visualizar tus gastos personales, con dos vistas:
 - Landing page
 - Dashboard mensual (filtros por anio y mes)
 
+## Despliegue completo en Vercel + PostgreSQL
+
+El dashboard y su API de datos se despliegan juntos en Vercel. El backend de voz
+no se despliega y se agregara despues como servicio independiente.
+
+1. Crea una base PostgreSQL desde una integracion del Marketplace de Vercel (por
+	ejemplo, Neon) y conectala a este proyecto. Vercel debe exponer la cadena de
+	conexion como `POSTGRES_URL`. Si tu proveedor usa otro nombre, copiala en una
+	variable `POSTGRES_URL` en Vercel.
+2. En Vercel importa este repositorio y usa estos valores:
+
+- Framework preset: `Vite`
+- Build command: `npm run build`
+- Output directory: `dist`
+
+3. Agrega estas variables de entorno de produccion en Vercel:
+
+```text
+POSTGRES_URL=postgresql://...
+GOOGLE_SHEETS_SPREADSHEET_ID=...
+GOOGLE_SHEETS_WORKSHEET=Gastos
+GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+```
+
+`GOOGLE_SERVICE_ACCOUNT_JSON` debe contener el JSON completo de la cuenta de
+servicio en una sola variable secreta. Comparte la hoja con el correo de esa
+cuenta, con permiso de lectura. Nunca subas `backend/service-account.json` ni
+`backend/.env` a Vercel.
+
+4. Despliega. La funcion `GET /api/transactions` crea la tabla `transactions` e
+	indices automaticamente. Luego abre el dashboard y pulsa **Actualizar datos**
+	para ejecutar `POST /api/sync` e importar tu Google Sheet.
+
+El frontend usa `/api` del mismo dominio de Vercel, por lo que no requiere
+`VITE_DATA_API_URL`. La pagina de registro por voz se mantiene en la PWA, pero
+solo se activa cuando definas `VITE_VOICE_API_URL` para el servicio de voz futuro.
+En desarrollo local, Vite conserva los proxies a `api_server.py` (puerto 8000) y
+`voice_server.py` (puerto 8001).
+
 ## Ejecutar en local
 
 1. Instalar dependencias:
