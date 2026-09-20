@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dashboard-gastos-v1'
+const CACHE_NAME = 'dashboard-gastos-v2'
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg']
 
 self.addEventListener('install', (event) => {
@@ -18,6 +18,11 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') {
+    return
+  }
+
+  const requestUrl = new URL(event.request.url)
+  if (requestUrl.origin !== self.location.origin || requestUrl.pathname.startsWith('/api/')) {
     return
   }
 

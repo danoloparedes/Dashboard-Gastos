@@ -7,6 +7,7 @@ export default async function handler(request, response) {
   }
 
   try {
+    response.setHeader('Cache-Control', 'no-store, max-age=0')
     return response.status(200).json({ transactions: await listTransactions() })
   } catch (error) {
     console.error(error)
