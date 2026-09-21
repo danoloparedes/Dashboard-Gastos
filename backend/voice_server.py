@@ -11,7 +11,6 @@ from dotenv import load_dotenv
 
 from voice_pipeline import (
   interpret_text_to_draft,
-  load_whisper,
   process_audio_to_draft,
   save_draft,
   transcribe_audio_to_text,
@@ -45,6 +44,18 @@ class Handler(BaseHTTPRequestHandler):
 
   def do_GET(self) -> None:
     parsed = urlparse(self.path)
+
+    if parsed.path == '/api/voice/config':
+      self._send_json({'result': {
+        'default_target': 'sqlite',
+        'targets': [
+          {'value': 'sqlite', 'label': 'Dashboard local'},
+          {'value': 'sheets', 'label': 'Google Sheets'},
+          {'value': 'both', 'label': 'Dashboard local + Google Sheets'},
+        ],
+        'max_audio_bytes': 24000000,
+      }})
+      return
 
     if parsed.path == '/health':
       self._send_json({'ok': True, 'service': 'voice-api'})
@@ -188,7 +199,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-  load_whisper()
   server = HTTPServer((HOST, PORT), Handler)
   print(f'Voice API running on http://{HOST}:{PORT}')
   server.serve_forever()

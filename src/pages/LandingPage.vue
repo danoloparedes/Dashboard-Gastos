@@ -9,7 +9,7 @@ defineEmits(['go-dashboard', 'go-capture'])
       <h1>Dashboard de gastos, simple y vivo.</h1>
       <p class="subtitle">
         Una página personal para seguir ingresos, gastos y ahorro mensual.
-        Empezamos con datos locales y la dejamos lista para conectar con Google Sheets + Django.
+        Visualiza tus gastos, sincroniza Google Sheets y registra movimientos por voz o texto.
       </p>
       <div class="cta-row">
         <button class="btn-primary" @click="$emit('go-dashboard')">Ver dashboard</button>

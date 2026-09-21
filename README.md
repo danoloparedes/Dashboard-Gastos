@@ -1,14 +1,16 @@
 # Dashboard Gastos
 
-Proyecto Vue para visualizar tus gastos personales, con dos vistas:
+Proyecto Vue para visualizar tus gastos personales, con tres vistas:
 
 - Landing page
 - Dashboard mensual (filtros por anio y mes)
+- Registro de gastos por voz o texto con OpenAI
 
 ## Despliegue completo en Vercel + PostgreSQL
 
-El dashboard y su API de datos se despliegan juntos en Vercel. El backend de voz
-no se despliega y se agregara despues como servicio independiente.
+El dashboard, la API de datos y los endpoints de voz se despliegan juntos en
+Vercel. Las funciones de `api/voice/` llaman a OpenAI desde el servidor y guardan
+en PostgreSQL o Google Sheets. No necesitas publicar un servidor Python aparte.
 
 1. Crea una base PostgreSQL desde una integracion del Marketplace de Vercel (por
 	ejemplo, Neon) y conectala a este proyecto. Vercel debe exponer la cadena de
@@ -27,22 +29,39 @@ POSTGRES_URL=postgresql://...
 GOOGLE_SHEETS_SPREADSHEET_ID=...
 GOOGLE_SHEETS_WORKSHEET=Gastos
 GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+OPENAI_API_KEY=tu_clave_de_openai
+OPENAI_TRANSCRIPTION_MODEL=gpt-4o-mini-transcribe
+OPENAI_EXPENSE_MODEL=gpt-4o-mini
 ```
 
 `GOOGLE_SERVICE_ACCOUNT_JSON` debe contener el JSON completo de la cuenta de
 servicio en una sola variable secreta. Comparte la hoja con el correo de esa
-cuenta, con permiso de lectura. Nunca subas `backend/service-account.json` ni
+cuenta, con permiso de lectura para sincronizar o de editor para guardar por voz.
+Nunca subas `backend/service-account.json` ni
 `backend/.env` a Vercel.
 
 4. Despliega. La funcion `GET /api/transactions` crea la tabla `transactions` e
 	indices automaticamente. Luego abre el dashboard y pulsa **Actualizar datos**
 	para ejecutar `POST /api/sync` e importar tu Google Sheet.
 
-El frontend usa `/api` del mismo dominio de Vercel, por lo que no requiere
-`VITE_DATA_API_URL`. La pagina de registro por voz se mantiene en la PWA, pero
-solo se activa cuando definas `VITE_VOICE_API_URL` para el servicio de voz futuro.
+El frontend usa `/api` y `/api/voice` del mismo dominio de Vercel. No necesitas
+`VITE_DATA_API_URL` ni `VITE_VOICE_API_URL`. Elimina `VITE_VOICE_API_URL` si la
+agregaste anteriormente y vuelve a desplegar los cambios del repositorio.
+Las claves de OpenAI son variables del servidor: nunca deben llevar prefijo `VITE_`.
+En `/#/capture`, el destino predeterminado es Dashboard (PostgreSQL). Los gastos
+guardados alli aparecen al abrir el dashboard sin sincronizar Google Sheets.
 En desarrollo local, Vite conserva los proxies a `api_server.py` (puerto 8000) y
 `voice_server.py` (puerto 8001).
+
+Endpoints incluidos: `GET /api/voice/config`, `POST /api/voice/transcribe`,
+`POST /api/voice/interpret`, `POST /api/voice/process`, `POST /api/voice/save`.
+La configuracion publica de voz informa los destinos de guardado y el limite de audio,
+sin exponer credenciales. El frontend adapta las opciones para Vercel o Python local.
+
+En Vercel los audios admiten hasta 4 MB, dejando margen para multipart dentro del
+[limite de carga de las funciones](https://vercel.com/docs/functions/limitations).
+Las llamadas a OpenAI tienen timeout y las funciones de voz disponen de 60 segundos.
+Pruebas de endpoints sin usar claves ni servicios reales: `npm test`.
 
 ## Ejecutar en local
 
@@ -125,33 +144,15 @@ npm run build
 - `backend/voice_server.py`: API de voz (proceso paralelo en puerto 8001)
 - `backend/voice_pipeline.py`: transcripcion, interpretacion y guardado (SQLite/Sheets)
 
-## Backend recomendado para tu caso
+## Backend y despliegue en Raspberry Pi
 
-Como ya manejas Python y Django, la opcion mas simple y mantenible es:
+En local y Raspberry se usan los servidores HTTP de Python de `backend/` y SQLite.
+En Vercel, las funciones JavaScript de `api/` usan PostgreSQL.
+Ambos entornos permiten sincronizar Google Sheets con su base de datos.
 
-- Django + Django REST Framework para exponer API
-- PostgreSQL o SQLite (SQLite funciona bien para volumen personal)
-- Un job diario para sincronizar desde Google Sheets a BD
-
-### Flujo de datos sugerido
-
-1. Script/management command de Django lee Google Sheets (1 vez al dia)
-2. Hace upsert de movimientos en tabla `transactions`
-3. Frontend consume API con datos ya normalizados
-
-## Despliegue en Raspberry Pi
-
-No abras el puerto directo del dev server de Vite. Mejor:
-
-1. Compilas frontend (`npm run build`)
-2. Sirves archivos estaticos con Nginx
-3. Django corre con Gunicorn (localhost)
-4. Nginx hace reverse proxy a Django
-
-Si quieres exponerlo publico desde casa:
-
-- Opcion A: Cloudflare Tunnel (recomendada)
-- Opcion B: abrir puertos + DNS dinamico + HTTPS (mas mantenimiento)
+En Raspberry, los scripts y servicios de `deploy/` publican el frontend compilado
+con Nginx y ejecutan las APIs Python en los puertos 8000 (datos) y 8001 (voz).
+Nginx redirige `/api/voice` al servicio de voz y `/api` al servicio de datos.
 
 ## Flujo local completo (real)
 
@@ -160,7 +161,7 @@ Orden recomendado para probar con datos reales:
 1. Sincronizar Google Sheets a SQLite:
 
 ```bash
-cd backend/sync
+cd backend
 python sync_google_sheet.py
 ```
 
@@ -188,7 +189,7 @@ Notas:
 
 - Endpoint de datos: `GET /api/transactions`
 - Endpoint voz: `POST /api/voice/process` y `POST /api/voice/save`
-- El frontend ya no usa mock de transacciones.
+- El frontend consulta las transacciones mediante la API.
 
 ## Registro de gastos por voz (PWA)
 
@@ -198,7 +199,7 @@ La app ahora incluye una vista movil para capturar gastos por voz:
 - En landing: boton **Registrar gasto por voz**
 - Flujo: grabar audio -> transcribir -> interpretar a columnas -> editar -> guardar
 
-### Backend de voz separado (recomendado)
+### Backend de voz en desarrollo local y Raspberry
 
 El servicio de voz corre en paralelo al dashboard:
 
@@ -207,38 +208,52 @@ El servicio de voz corre en paralelo al dashboard:
 
 En desarrollo, Vite hace proxy automatico de `/api/voice` al puerto 8001.
 
-### Variables para voz (`backend/.env`)
+### Voz con OpenAI: configuracion local y produccion
 
-Revisa `backend/.env.example` y define:
+El backend envia el audio a OpenAI para transcribirlo y usa Responses con
+Structured Outputs para extraer `fecha`, `descripcion`, `clasificacion`, `tipo`,
+`abono` y `gasto`. Conserva los pasos de transcribir, interpretar, editar y guardar,
+asi como los endpoints `/api/voice/transcribe`, `/interpret`, `/process` y `/save`.
+El procesamiento de audio y texto se realiza mediante la API de OpenAI.
 
-- `VOICE_API_HOST`, `VOICE_API_PORT`
-- `VOICE_WHISPER_MODE`: `mock` o `faster-whisper`
-- `VOICE_WHISPER_MODEL`, `VOICE_WHISPER_COMPUTE_TYPE`
-- `VOICE_OLLAMA_MODEL` (opcional, si quieres parse con Ollama)
-- `VOICE_OLLAMA_URL`
+1. Instala las dependencias desde la raiz del proyecto:
 
-Si `VOICE_OLLAMA_MODEL` queda vacio, se usa parser heuristico local.
-
-### Activar Whisper real para pruebas
-
-1. Instala dependencias backend (incluye `faster-whisper`):
-
-```bash
-cd backend
-pip install -r requirements.txt
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
 ```
 
-2. En `backend/.env`, deja:
+2. Agrega a `backend/.env` (no al `.env` del frontend):
 
-```env
-VOICE_WHISPER_MODE=faster-whisper
-VOICE_WHISPER_MODEL=small
-VOICE_WHISPER_COMPUTE_TYPE=int8
+```dotenv
+OPENAI_API_KEY=tu_clave_de_openai
+OPENAI_TRANSCRIPTION_MODEL=gpt-4o-mini-transcribe
+OPENAI_EXPENSE_MODEL=gpt-4o-mini
 ```
 
-3. Reinicia `voice_server.py`.
+Los modelos son opcionales: esos son los valores predeterminados.
+No subas `.env` al repositorio ni uses `VITE_OPENAI_API_KEY`: las variables `VITE_*`
+se incorporan al frontend y son visibles desde el navegador.
 
-4. Al procesar audio, la respuesta devuelve `meta.transcription_engine` y `meta.elapsed_ms` para validar motor y tiempo.
+3. Reinicia `backend/voice_server.py`, o inicia el entorno con `run_dashboard.bat`.
+
+En Vercel, configura las mismas tres variables en Settings > Environment Variables
+y despliega esta version del repositorio. Las funciones Node.js de voz las leen
+directamente: no necesitas `VITE_VOICE_API_URL` ni un servidor Python externo.
+Para Raspberry, el servicio systemd existente carga `backend/.env`.
+Las variables de entorno tienen prioridad sobre el archivo `.env`.
+
+El audio se transmite a OpenAI. Admite MP3, MP4, MPEG, MPGA, M4A, WAV y WebM
+hasta 4 MB en Vercel y 24 MB en la interfaz local. Los errores de clave, cuota y conexion se muestran sin exponer
+respuestas internas del proveedor. Un monto ausente queda en cero y debe
+completarse antes de guardar; nunca se genera un gasto ficticio.
+
+En Vercel el guardado usa PostgreSQL, Google Sheets o ambos; en local usa SQLite,
+Google Sheets o ambos. Si solo guardas en Sheets, ejecuta **Actualizar datos**.
+Al guardar en ambos desde Vercel, se reutiliza el identificador de fila de Sheets
+para evitar duplicados durante la siguiente sincronizacion.
+
+Referencias: [transcripcion](https://developers.openai.com/api/docs/guides/speech-to-text)
+y [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs).
 
 ### Instalable en celular (PWA)
 
@@ -286,7 +301,7 @@ Normalmente significa que Vite no pudo llegar a la API. Solucion rapida:
 
 Se agrego una base de sincronizacion en `backend/`:
 
-- `backend/sync/sync_google_sheet.py`: descarga datos desde Google Sheets y hace upsert
+- `backend/sync_google_sheet.py`: descarga datos desde Google Sheets y hace upsert
 - `backend/sync/schema.sql`: schema de tabla `transactions`
 - `backend/.env.example`: variables de entorno
 
@@ -313,7 +328,7 @@ SQLITE_DB_PATH=./data/gastos.db
 ### 3) Ejecutar sincronizacion manual
 
 ```bash
-cd backend/sync
+cd backend
 python sync_google_sheet.py
 ```
 
@@ -322,10 +337,10 @@ python sync_google_sheet.py
 Con `cron`:
 
 ```bash
-0 3 * * * cd /ruta/proyecto/backend/sync && /ruta/venv/bin/python sync_google_sheet.py >> /ruta/proyecto/backend/sync.log 2>&1
+0 3 * * * cd /ruta/proyecto/backend && /ruta/venv/bin/python sync_google_sheet.py >> /ruta/proyecto/backend/sync.log 2>&1
 ```
 
-Con esto puedes mantener la BD local actualizada diariamente y luego exponerla via Django API.
+La API `backend/api_server.py` expone los datos de la base local sincronizada.
 
 ## Raspberry auto-update + auto-start al reiniciar
 

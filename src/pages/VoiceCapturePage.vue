@@ -1,7 +1,8 @@
 <script setup>
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   interpretVoiceTranscript,
+  fetchVoiceConfig,
   saveVoiceDraft,
   transcribeVoiceAudio,
   transcribeVoiceText
@@ -13,7 +14,14 @@ const status = ref('Listo para grabar')
 const error = ref('')
 const processing = ref(false)
 const saving = ref(false)
-const saveTarget = ref('sqlite')
+const saveTarget = ref('')
+const voiceConfig = ref(null)
+onMounted(async () => {
+  try {
+    voiceConfig.value = await fetchVoiceConfig()
+    saveTarget.value = voiceConfig.value.default_target
+  } catch (err) { error.value = err.message }
+})
 const transcript = ref('')
 const transcriptionMeta = ref(null)
 const interpretationMeta = ref(null)
@@ -95,7 +103,8 @@ const startRecording = async () => {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     chunks = []
-    mediaRecorder = new MediaRecorder(stream)
+    const mimeType = ['audio/webm', 'audio/mp4'].find((type) => MediaRecorder.isTypeSupported(type))
+    mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
 
     mediaRecorder.addEventListener('dataavailable', (event) => {
       if (event.data.size > 0) {
@@ -104,7 +113,7 @@ const startRecording = async () => {
     })
 
     mediaRecorder.addEventListener('stop', () => {
-      const blob = new Blob(chunks, { type: 'audio/webm' })
+      const blob = new Blob(chunks, { type: mediaRecorder.mimeType || chunks[0]?.type || 'audio/webm' })
       clearAudio()
       audioBlob.value = blob
       audioUrl.value = URL.createObjectURL(blob)
@@ -133,11 +142,15 @@ const transcribeAudio = async () => {
     error.value = 'Primero graba un audio o usa texto manual.'
     return
   }
+  if (voiceConfig.value && audioBlob.value.size > voiceConfig.value.max_audio_bytes) {
+    error.value = `El audio supera el limite de ${voiceConfig.value.max_audio_bytes / 1000000} MB. Graba un mensaje mas corto.`
+    return
+  }
 
   processing.value = true
   error.value = ''
   savedMessage.value = ''
-  status.value = 'Transcribiendo audio con Whisper...'
+  status.value = 'Transcribiendo audio con OpenAI...'
 
   try {
     const result = await transcribeVoiceAudio(audioBlob.value)
@@ -166,7 +179,7 @@ const interpretText = async () => {
   processing.value = true
   error.value = ''
   savedMessage.value = ''
-  status.value = 'Interpretando texto con Ollama/parser...'
+  status.value = 'Interpretando texto con OpenAI...'
 
   try {
     const result = await interpretVoiceTranscript(transcript.value.trim())
@@ -224,7 +237,7 @@ const saveDraft = async () => {
     const result = await saveVoiceDraft(draft.value, saveTarget.value)
     const channels = Object.keys(result.saved || {})
     savedMessage.value = `Guardado correctamente en: ${channels.join(', ')}`
-    status.value = 'Gasto guardado. Ya deberia aparecer en el dashboard.'
+    status.value = 'Gasto guardado en el destino seleccionado. Si usas Sheets, sincroniza el dashboard para verlo.'
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'No se pudo guardar el gasto.'
   } finally {
@@ -254,7 +267,7 @@ onUnmounted(() => {
         <button class="btn-secondary" :disabled="!isRecording" @click="stopRecording">
           Detener
         </button>
-        <button class="btn-secondary" :disabled="!audioBlob || processing" @click="transcribeAudio">
+        <button class="btn-secondary" :disabled="!voiceConfig || !audioBlob || processing" @click="transcribeAudio">
           1) Transcribir audio
         </button>
       </div>
@@ -262,6 +275,7 @@ onUnmounted(() => {
       <label class="capture-field">
         O subir audio (fallback celular)
         <input type="file" accept="audio/*" capture="user" @change="onAudioFileSelected" />
+        <span v-if="voiceConfig">Maximo {{ voiceConfig.max_audio_bytes / 1000000 }} MB por audio.</span>
       </label>
 
       <p v-if="!isSecureContextOk" class="capture-note">
@@ -289,7 +303,7 @@ onUnmounted(() => {
 
       <div class="capture-stage-grid">
         <p class="capture-stage" v-if="transcriptionMeta">
-          Whisper: {{ transcriptionMeta.transcription_engine || 'desconocido' }} -
+          Transcripcion: {{ transcriptionMeta.transcription_engine || 'desconocido' }} -
           {{ transcriptionMeta.elapsed_ms ?? '-' }} ms
         </p>
         <p class="capture-stage" v-if="interpretationMeta">
@@ -337,13 +351,13 @@ onUnmounted(() => {
       <label class="capture-field">
         Destino de guardado
         <select v-model="saveTarget">
-          <option value="sqlite">SQLite (inmediato dashboard)</option>
-          <option value="sheets">Google Sheets</option>
-          <option value="both">SQLite + Google Sheets</option>
+          <option v-for="target in voiceConfig?.targets || []" :key="target.value" :value="target.value">
+            {{ target.label }}
+          </option>
         </select>
       </label>
 
-      <button class="btn-primary" :disabled="saving" @click="saveDraft">
+      <button class="btn-primary" :disabled="saving || !saveTarget" @click="saveDraft">
         {{ saving ? 'Guardando...' : 'Confirmar y guardar' }}
       </button>
 

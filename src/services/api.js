@@ -1,5 +1,5 @@
 const API_BASE = resolveApiBase(import.meta.env.VITE_DATA_API_URL, '/api')
-const VOICE_API_BASE = resolveApiBase(import.meta.env.VITE_VOICE_API_URL, '/api/voice')
+const VOICE_API_BASE = '/api/voice'
 const REQUEST_TIMEOUT_MS = 8000
 const SYNC_TIMEOUT_MS = 90000
 const VOICE_TIMEOUT_MS = 120000
@@ -18,10 +18,6 @@ function dataApiUrl(path) {
 }
 
 function voiceApiUrl(path) {
-  if (!VOICE_API_BASE) {
-    throw new Error('El asistente de voz aun no esta configurado en este despliegue.')
-  }
-
   return `${VOICE_API_BASE}${path}`
 }
 
@@ -56,31 +52,20 @@ export async function triggerSync() {
   throw new Error(`Error ejecutando sync (${response.status})`)
 }
 
-export async function processVoiceAudio(audioBlob) {
-  const form = new FormData()
-  form.append('audio', audioBlob, 'voice.webm')
-
-  const response = await fetchWithTimeout(
-    voiceApiUrl('/process'),
-    {
-      method: 'POST',
-      body: form
-    },
-    VOICE_TIMEOUT_MS
-  )
-
-  if (!response.ok) {
-    const payload = await safeJson(response)
-    throw new Error(payload?.error || `Error procesando audio (${response.status})`)
-  }
-
-  const payload = await response.json()
-  return payload.result || {}
+function audioFilename(blob) {
+  if (blob.name) return blob.name
+  const mime = (blob.type || '').split(';')[0]
+  const extension = {
+    'audio/mp4': 'mp4', 'video/mp4': 'mp4', 'audio/x-m4a': 'm4a',
+    'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav',
+    'audio/ogg': 'ogg', 'audio/webm': 'webm'
+  }[mime] || 'webm'
+  return `voice.${extension}`
 }
 
 export async function transcribeVoiceAudio(audioBlob) {
   const form = new FormData()
-  form.append('audio', audioBlob, 'voice.webm')
+  form.append('audio', audioBlob, audioFilename(audioBlob))
 
   const response = await fetchWithTimeout(
     voiceApiUrl('/transcribe'),
@@ -98,6 +83,12 @@ export async function transcribeVoiceAudio(audioBlob) {
 
   const payload = await response.json()
   return payload.result || {}
+}
+
+export async function fetchVoiceConfig() {
+  const response = await fetchWithTimeout(voiceApiUrl('/config'))
+  if (!response.ok) throw new Error('No se pudo cargar la configuracion de voz. Recarga la pagina.')
+  return (await response.json()).result
 }
 
 export async function transcribeVoiceText(text) {
@@ -144,29 +135,7 @@ export async function interpretVoiceTranscript(transcript) {
   return payload.result || {}
 }
 
-export async function processVoiceText(text) {
-  const response = await fetchWithTimeout(
-    voiceApiUrl('/process'),
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ text_override: text })
-    },
-    VOICE_TIMEOUT_MS
-  )
-
-  if (!response.ok) {
-    const payload = await safeJson(response)
-    throw new Error(payload?.error || `Error procesando texto (${response.status})`)
-  }
-
-  const payload = await response.json()
-  return payload.result || {}
-}
-
-export async function saveVoiceDraft(draft, persistTarget = 'sqlite') {
+export async function saveVoiceDraft(draft, persistTarget) {
   const response = await fetchWithTimeout(
     voiceApiUrl('/save'),
     {
@@ -179,7 +148,7 @@ export async function saveVoiceDraft(draft, persistTarget = 'sqlite') {
         persist_target: persistTarget
       })
     },
-    REQUEST_TIMEOUT_MS
+    SYNC_TIMEOUT_MS
   )
 
   if (!response.ok) {

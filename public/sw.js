@@ -1,5 +1,5 @@
-const CACHE_NAME = 'dashboard-gastos-v2'
-const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg']
+const CACHE_NAME = 'dashboard-gastos-v4'
+const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.png']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

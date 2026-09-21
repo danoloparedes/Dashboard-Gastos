@@ -9,17 +9,13 @@ from pathlib import Path
 import gspread
 from dotenv import load_dotenv
 
-try:
-    from db import count_transactions, delete_missing_transactions, get_connection, init_schema, upsert_transaction
-except ModuleNotFoundError:
-    from sync.db import count_transactions, delete_missing_transactions, get_connection, init_schema, upsert_transaction
+from sync.db import count_transactions, delete_missing_transactions, get_connection, init_schema, upsert_transaction
 
 
 HEADER_MAP = {
     "fecha": "fecha",
     "descripcion": "descripcion",
     "descripsion": "descripcion",
-    "descripcion": "descripcion",
     "clasificacion": "clasificacion",
     "classificacion": "clasificacion",
     "tipo": "tipo",

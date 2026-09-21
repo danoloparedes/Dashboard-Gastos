@@ -113,3 +113,25 @@ export async function syncGoogleSheet() {
     total: await countTransactions()
   }
 }
+
+export async function appendVoiceToSheet(draft) {
+  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID
+  const worksheetName = process.env.GOOGLE_SHEETS_WORKSHEET || 'Gastos'
+  if (!spreadsheetId) throw new Error('Missing spreadsheet configuration')
+  const auth = new google.auth.GoogleAuth({
+    credentials: getCredentials(), scopes: ['https://www.googleapis.com/auth/spreadsheets']
+  })
+  const sheets = google.sheets({ version: 'v4', auth })
+  const range = `'${worksheetName.replace(/'/g, "''")}'!A:Z`
+  const headerResponse = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${worksheetName.replace(/'/g, "''")}'!A1:Z1` })
+  const headers = headerResponse.data.values?.[0] || []
+  const names = headers.map(normalizeText)
+  if (REQUIRED_HEADERS.some(key => !names.includes(key))) throw new Error('Invalid sheet headers')
+  const response = await sheets.spreadsheets.values.append({
+    spreadsheetId, range, valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS',
+    requestBody: { values: [names.map(key => draft[key] ?? '')] }
+  })
+  const row = response.data.updates?.updatedRange?.match(/![A-Z]+(\d+)(?::[A-Z]+\d+)?$/)?.[1]
+  if (!row) throw new Error('Missing appended sheet row')
+  return { worksheet: worksheetName, external_id: `${worksheetName}:${row}` }
+}

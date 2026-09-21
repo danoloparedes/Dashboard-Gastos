@@ -19,6 +19,10 @@ __pycache__/
 
 # Local env and credentials
 backend/.env
+.env
+.env.*
+!.env.example
+.pip-tmp/
 backend/service-account.json
 
 # Local runtime data
