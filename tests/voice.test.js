@@ -1,4 +1,5 @@
-import test from 'node:test'
+import test, { beforeEach } from 'node:test'
+import { authFixture, COOKIE } from './auth-fixture.js'
 import assert from 'node:assert/strict'
 import transcribe from '../api/voice/transcribe.js'
 import interpret from '../api/voice/interpret.js'
@@ -8,18 +9,19 @@ import save, { saveDraft } from '../api/voice/save.js'
 import { validateDraft } from '../api/_lib/voice.js'
 
 const draft = { fecha: '2026-09-21', descripcion: 'Cafe', clasificacion: 'Comida', tipo: 'Necesidad', abono: 0, gasto: 2500 }
+beforeEach(t => authFixture(t))
 function env(t, key, value) {
   const previous = process.env[key]
   process.env[key] = value
   t.after(() => { if (previous === undefined) delete process.env[key]; else process.env[key] = previous })
 }
 function json(body) {
-  return new Request('http://localhost/api/voice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  return new Request('http://localhost/api/voice', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Gastos-Request': '1', Cookie: COOKIE }, body: JSON.stringify(body) })
 }
 function audio(bytes = new Uint8Array([0, 32, 13, 10, 255])) {
   const form = new FormData()
   form.append('audio', new Blob([bytes], { type: 'audio/mp4' }), 'voice.mp4')
-  return new Request('http://localhost/api/voice/transcribe', { method: 'POST', body: form })
+  return new Request('http://localhost/api/voice/transcribe', { method: 'POST', headers: { 'X-Gastos-Request': '1', Cookie: COOKIE }, body: form })
 }
 function completed(value = draft) {
   return Response.json({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(value) }] }] })
@@ -82,7 +84,7 @@ test('invalid audio, text, JSON and missing key are rejected', async t => {
   assert.equal((await transcribe.fetch(audio(new Uint8Array(4_000_001)))).status, 413)
   assert.equal((await transcribe.fetch(audio(new Uint8Array()))).status, 400)
   assert.equal((await interpret.fetch(json({ transcript: '' }))).status, 400)
-  assert.equal((await interpret.fetch(new Request('http://localhost', { method: 'POST', body: '{' }))).status, 400)
+  assert.equal((await interpret.fetch(new Request('http://localhost', { method: 'POST', headers: { 'X-Gastos-Request': '1', Cookie: COOKIE }, body: '{' }))).status, 400)
 })
 
 test('provider errors and incomplete/refused/invalid outputs are safe', async t => {

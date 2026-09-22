@@ -13,6 +13,7 @@ import gspread
 from dotenv import load_dotenv
 
 from openai import OpenAI, APIConnectionError, APIStatusError, APITimeoutError
+from assistant_auth import consume_openai
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / '.env')
@@ -26,6 +27,7 @@ def _openai_client() -> OpenAI:
   key = os.getenv('OPENAI_API_KEY', '').strip()
   if not key:
     raise RuntimeError('Falta OPENAI_API_KEY en backend/.env o en el entorno del servicio de voz.')
+  consume_openai()
   return OpenAI(api_key=key, timeout=45.0, max_retries=0)
 
 

@@ -32,6 +32,8 @@ GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
 OPENAI_API_KEY=tu_clave_de_openai
 OPENAI_TRANSCRIPTION_MODEL=gpt-4o-mini-transcribe
 OPENAI_EXPENSE_MODEL=gpt-4o-mini
+ASSISTANT_PASSWORD=elige_una_contraseña_privada_de_al_menos_16_caracteres
+ASSISTANT_DAILY_OPENAI_LIMIT=100
 ```
 
 `GOOGLE_SERVICE_ACCOUNT_JSON` debe contener el JSON completo de la cuenta de
@@ -62,6 +64,52 @@ En Vercel los audios admiten hasta 4 MB, dejando margen para multipart dentro de
 [limite de carga de las funciones](https://vercel.com/docs/functions/limitations).
 Las llamadas a OpenAI tienen timeout y las funciones de voz disponen de 60 segundos.
 Pruebas de endpoints sin usar claves ni servicios reales: `npm test`.
+
+## Acceso privado al asistente y sincronizacion
+
+El dashboard y `GET /api/transactions` siguen siendo publicos, con el mismo formato
+de respuesta para otros proyectos. Todos los POST de voz y `POST /api/sync` requieren
+una sesion valida. `GET /api/voice/config` solo expone opciones publicas.
+
+En Vercel > Settings > Environment Variables agrega `ASSISTANT_PASSWORD` (obligatoria,
+minimo 16 caracteres, unica y aleatoria). Selecciona Production y tambien Preview si
+usas despliegues de prueba. No uses el prefijo `VITE_`. Conserva las variables de
+OpenAI y `POSTGRES_URL`. No hace falta `VITE_VOICE_API_URL`, otro servicio ni una
+clave adicional para firmar sesiones. Sube estos cambios y vuelve a desplegar.
+
+`ASSISTANT_DAILY_OPENAI_LIMIT` es opcional y vale `100` por defecto: limita las llamadas
+a OpenAI en una ventana de 24 horas iniciada con el primer uso, compartida entre
+todas las sesiones que usan la misma base. Transcribir e interpretar consumen dos
+llamadas; interpretar texto manual consume una. Los intentos fallidos al proveedor
+tambien cuentan. Es un limite de solicitudes, no de dinero gastado.
+
+Al entrar al asistente se pide la contraseña. Para sincronizar, pulsa **Actualizar
+datos**, ingresa y vuelve a pulsar el boton. Las nuevas sesiones no vencen en el
+servidor y permiten ambos usos. La cookie persiste al cerrar el navegador y se
+renueva por 400 dias cada vez que abres el asistente. El navegador puede imponer
+sus propios limites o borrarla; cambiar de navegador/dominio o borrar datos del
+sitio requiere ingresar de nuevo. Las sesiones creadas por versiones anteriores
+conservan su vencimiento hasta que ingreses nuevamente.
+**Cerrar sesion** revoca la sesion en el servidor. Cambiar la contraseña en el
+entorno y redesplegar invalida las sesiones previas en el nuevo despliegue.
+Los despliegues antiguos conservan su propia configuracion hasta retirarlos.
+
+Las cookies son HttpOnly, Secure y SameSite=Strict. Las sesiones almacenan solo el
+hash del token en PostgreSQL; no se guarda la contraseña ni la cookie en localStorage.
+Se crean automaticamente las tablas `assistant_sessions` y `assistant_limits`.
+Los limites se actualizan atomicamente en la base, incluso con varias instancias:
+5 intentos de ingreso por IP cada 15 minutos, 60 globales cada 15 minutos y
+30 acciones privadas por minuto. Sin contraseña configurada o sin acceso a la base,
+las operaciones privadas se bloquean; no se llama a OpenAI.
+
+En local/Raspberry agrega la misma contraseña y limite a `backend/.env` y reinicia
+ambos servidores Python. Sus sesiones y contadores se guardan en
+`backend/data/assistant-auth.db`, separados de los gastos. Usa HTTPS local para la
+cookie segura (o localhost en un navegador que permita cookies Secure alli).
+Vite y Nginx redirigen `/api/auth/` al servidor de voz.
+
+Referencias: [cookies seguras](https://developer.mozilla.org/en-US/docs/Web/Security/Practical_implementation_guides/Cookies)
+y [cabeceras de IP de Vercel](https://vercel.com/docs/headers/request-headers).
 
 ## Ejecutar en local
 

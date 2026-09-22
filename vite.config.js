@@ -22,6 +22,10 @@ export default defineConfig({
     host: true,
     https: httpsConfig,
     proxy: {
+      '/api/auth': {
+        target: 'http://127.0.0.1:8001',
+        changeOrigin: true
+      },
       '/api/voice': {
         target: 'http://127.0.0.1:8001',
         changeOrigin: true

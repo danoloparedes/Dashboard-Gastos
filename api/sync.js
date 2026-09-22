@@ -1,15 +1,15 @@
 import { syncGoogleSheet } from './_lib/sheets.js'
+import { requireSession, accessResponse } from './_lib/auth.js'
 
-export default async function handler(request, response) {
+export default { async fetch(request) {
   if (request.method !== 'POST') {
-    response.setHeader('Allow', 'POST')
-    return response.status(405).json({ error: 'method_not_allowed' })
+    return Response.json({ error: 'method_not_allowed' }, { status: 405, headers: { Allow: 'POST' } })
   }
 
+  try { await requireSession(request) } catch (error) { return accessResponse(error) }
   try {
-    return response.status(200).json({ ok: true, result: await syncGoogleSheet() })
-  } catch (error) {
-    console.error(error)
-    return response.status(500).json({ ok: false, error: error.message || 'sync_error' })
+    return Response.json({ ok: true, result: await syncGoogleSheet() }, { headers: { 'Cache-Control': 'no-store' } })
+  } catch {
+    return Response.json({ error: 'No se pudo sincronizar Google Sheets.' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
-}
+} }

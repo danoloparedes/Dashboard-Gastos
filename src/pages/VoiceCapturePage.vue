@@ -1,5 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import AssistantAccess from '../components/AssistantAccess.vue'
+import { authenticated } from '../services/auth'
 import {
   interpretVoiceTranscript,
   fetchVoiceConfig,
@@ -257,7 +259,8 @@ onUnmounted(() => {
       <h1>Registro por voz</h1>
     </header>
 
-    <section class="capture-card">
+    <AssistantAccess />
+    <section v-if="authenticated" class="capture-card">
       <p class="capture-status">{{ status }}</p>
 
       <div class="capture-actions">

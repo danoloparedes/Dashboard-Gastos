@@ -1,3 +1,5 @@
+import { requireSession, consumeOpenAI, AccessError } from './auth.js'
+
 export const MAX_AUDIO_BYTES = 4_000_000
 const TYPES = ['Ahorro', 'Antojo', 'Necesidad']
 export const EXPENSE_SCHEMA = {
@@ -46,6 +48,7 @@ export async function readJson(request) {
 async function openai(path, body, json = true) {
   const key = process.env.OPENAI_API_KEY?.trim()
   if (!key) throw new VoiceError('Falta configurar OPENAI_API_KEY en Vercel.', 503)
+  await consumeOpenAI()
   let response
   try {
     response = await fetch(`https://api.openai.com/v1/${path}`, {
@@ -137,11 +140,13 @@ export function endpoint(action) {
   return { async fetch(request) {
     if (request.method !== 'POST') return Response.json({ error: 'method_not_allowed' }, { status: 405, headers: { Allow: 'POST' } })
     try {
+      await requireSession(request)
       const result = await action(request)
       return Response.json({ ok: true, result }, { headers: { 'Cache-Control': 'no-store' } })
     } catch (error) {
-      return Response.json({ ok: false, error: error instanceof VoiceError ? error.message : 'No se pudo completar la operacion. Revisa la configuracion del servidor.' }, {
-        status: error instanceof VoiceError ? error.status : 500, headers: { 'Cache-Control': 'no-store' }
+      const expected = error instanceof VoiceError || error instanceof AccessError
+      return Response.json({ ok: false, error: expected ? error.message : 'No se pudo completar la operacion. Revisa la configuracion del servidor.' }, {
+        status: expected ? error.status : 500, headers: { 'Cache-Control': 'no-store' }
       })
     }
   } }

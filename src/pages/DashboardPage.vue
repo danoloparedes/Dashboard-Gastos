@@ -1,5 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import AssistantAccess from '../components/AssistantAccess.vue'
+import { authenticated } from '../services/auth'
 import DailyTypeChart from '../components/charts/DailyTypeChart.vue'
 import StackedMonthlyChart from '../components/charts/StackedMonthlyChart.vue'
 import { CLP_FORMATTER, MONTHS, TYPES, toAmount } from '../data/transactions'
@@ -12,6 +14,17 @@ const loading = ref(true)
 const refreshing = ref(false)
 const error = ref('')
 const lastUpdated = ref(null)
+const showAccess = ref(false)
+const syncError = ref('')
+const syncData = async () => {
+  showAccess.value = true
+  if (!authenticated.value) return
+  syncError.value = ''
+  refreshing.value = true
+  try { await triggerSync(); await loadData('background') }
+  catch (err) { syncError.value = err.message }
+  finally { refreshing.value = false }
+}
 let refreshInterval = null
 
 const yearOptions = computed(() => {
@@ -46,9 +59,6 @@ const loadData = async (mode = 'initial') => {
 
   error.value = ''
   try {
-    if (mode === 'manual') {
-      await triggerSync()
-    }
     transactions.value = await fetchTransactions()
     lastUpdated.value = new Date()
   } catch (err) {
@@ -282,11 +292,13 @@ const updatedLabel = computed(() => {
       <h1>Dashboard de gastos</h1>
       <div class="topbar-actions">
         <span class="sync-hint">Actualizado: {{ updatedLabel }}</span>
-        <button class="btn-secondary" :disabled="loading || refreshing" @click="loadData('manual')">
+        <button class="btn-secondary" :disabled="loading || refreshing" @click="syncData">
           {{ refreshing ? 'Actualizando...' : 'Actualizar datos' }}
         </button>
       </div>
     </header>
+    <AssistantAccess v-if="showAccess" />
+    <p v-if="syncError" role="alert" class="capture-error">{{ syncError }}</p>
 
     <section v-if="loading" class="status-card">
       Cargando datos desde SQL...

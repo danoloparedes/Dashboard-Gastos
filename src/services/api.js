@@ -1,3 +1,5 @@
+import { authenticated } from './auth'
+
 const API_BASE = resolveApiBase(import.meta.env.VITE_DATA_API_URL, '/api')
 const VOICE_API_BASE = '/api/voice'
 const REQUEST_TIMEOUT_MS = 8000
@@ -165,10 +167,16 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = REQUEST_TIMEOUT_M
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    return await fetch(url, {
+    const response = await fetch(url, {
       ...options,
+      headers: { ...options.headers, ...(options.method && options.method !== 'GET' ? { 'X-Gastos-Request': '1' } : {}) },
       signal: controller.signal
     })
+    if (response.status === 401) {
+      authenticated.value = false
+      throw new Error('La sesion termino. Ingresa tu contraseña nuevamente.')
+    }
+    return response
   } catch (error) {
     if (error && error.name === 'AbortError') {
       throw new Error('Timeout al consultar API')
