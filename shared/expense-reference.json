@@ -1,0 +1,501 @@
+{
+  "source": "gastos dashboard historico.xlsx",
+  "movements": 155,
+  "categories": [
+    "Almuerzo",
+    "Celular",
+    "Comida",
+    "Dap",
+    "Dpto",
+    "Estudio",
+    "Fit",
+    "General",
+    "Higiene",
+    "Nieve",
+    "Ocio",
+    "Otros",
+    "Rosario",
+    "Salud",
+    "Social",
+    "Souvenir",
+    "Sueldo",
+    "Transporte"
+  ],
+  "patterns": [
+    {
+      "descripcion": "Estacionamiento Dmoov",
+      "clasificacion": "Transporte",
+      "tipo": "Necesidad",
+      "count": 21
+    },
+    {
+      "descripcion": "Almuerzo Spid",
+      "clasificacion": "Comida",
+      "tipo": "Necesidad",
+      "count": 11
+    },
+    {
+      "descripcion": "Bencina",
+      "clasificacion": "Transporte",
+      "tipo": "Necesidad",
+      "count": 9
+    },
+    {
+      "descripcion": "Clase Ingles Olga",
+      "clasificacion": "Estudio",
+      "tipo": "Antojo",
+      "count": 7
+    },
+    {
+      "descripcion": "Cafe Brutal",
+      "clasificacion": "Comida",
+      "tipo": "Antojo",
+      "count": 6
+    },
+    {
+      "descripcion": "Padel Cepar",
+      "clasificacion": "Fit",
+      "tipo": "Antojo",
+      "count": 4
+    },
+    {
+      "descripcion": "Souvenirs Canada",
+      "clasificacion": "Souvenir",
+      "tipo": "Antojo",
+      "count": 4
+    },
+    {
+      "descripcion": "Sueldo Ausenco",
+      "clasificacion": "Sueldo",
+      "tipo": null,
+      "count": 3
+    },
+    {
+      "descripcion": "Arriendo Dpto",
+      "clasificacion": "Dpto",
+      "tipo": null,
+      "count": 3
+    },
+    {
+      "descripcion": "Clase Portugues",
+      "clasificacion": "Estudio",
+      "tipo": "Antojo",
+      "count": 3
+    },
+    {
+      "descripcion": "Wellhub",
+      "clasificacion": "Fit",
+      "tipo": "Antojo",
+      "count": 3
+    },
+    {
+      "descripcion": "Cafeteria Epadel",
+      "clasificacion": "Comida",
+      "tipo": "Antojo",
+      "count": 3
+    },
+    {
+      "descripcion": "Estacionamiento Oxxo",
+      "clasificacion": "Transporte",
+      "tipo": "Necesidad",
+      "count": 3
+    },
+    {
+      "descripcion": "FIlamento Impresora 3D",
+      "clasificacion": "Ocio",
+      "tipo": "Antojo",
+      "count": 2
+    },
+    {
+      "descripcion": "Flores",
+      "clasificacion": "Rosario",
+      "tipo": "Antojo",
+      "count": 2
+    },
+    {
+      "descripcion": "Tornillos - PiscolaBot",
+      "clasificacion": "Ocio",
+      "tipo": "Antojo",
+      "count": 2
+    },
+    {
+      "descripcion": "Almuerzo Spid",
+      "clasificacion": "Comida",
+      "tipo": "Antojo",
+      "count": 2
+    },
+    {
+      "descripcion": "Estacionamiento Los Dominicos",
+      "clasificacion": "Transporte",
+      "tipo": "Necesidad",
+      "count": 2
+    },
+    {
+      "descripcion": "Sobrante del mes",
+      "clasificacion": "Dap",
+      "tipo": "Ahorro",
+      "count": 2
+    },
+    {
+      "descripcion": "Entel",
+      "clasificacion": "Celular",
+      "tipo": "Necesidad",
+      "count": 2
+    },
+    {
+      "descripcion": "Almuerzo Oxxo",
+      "clasificacion": "Comida",
+      "tipo": "Necesidad",
+      "count": 2
+    },
+    {
+      "descripcion": "Flores Rosario",
+      "clasificacion": "Rosario",
+      "tipo": "Antojo",
+      "count": 2
+    },
+    {
+      "descripcion": "Barra Proteina",
+      "clasificacion": "Fit",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Laca Impresora 3D",
+      "clasificacion": "Ocio",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Pasta de Dientes",
+      "clasificacion": "Higiene",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Ferrero Rocher",
+      "clasificacion": "Rosario",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Maderas Stand Monitor",
+      "clasificacion": "Ocio",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Pago Unired",
+      "clasificacion": "Transporte",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Estacionamiento Costanera",
+      "clasificacion": "Transporte",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Corte de pelo + barba",
+      "clasificacion": "Higiene",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Seguro Dpto mar-jun",
+      "clasificacion": "Dpto",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Junta Corpo Indepe",
+      "clasificacion": "Social",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Almuerzo Martin",
+      "clasificacion": "Social",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Estacionamiento Mut",
+      "clasificacion": "Transporte",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Papel Lija",
+      "clasificacion": "Ocio",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Cumple mes Flores + Ferrero",
+      "clasificacion": "Rosario",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Tornilos M3 25mm Allen",
+      "clasificacion": "Ocio",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Tornilos M3 16mm Allen",
+      "clasificacion": "Ocio",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Encerado y cantos Snow",
+      "clasificacion": "Ocio",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Medias Lunas Bienvenida",
+      "clasificacion": "Comida",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Homecenter Lampara",
+      "clasificacion": "Ocio",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Lampara Easy",
+      "clasificacion": "Ocio",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Barra Proteina",
+      "clasificacion": "Comida",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Sushi celebracion Rosario",
+      "clasificacion": "Comida",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Almuerzo Nieve",
+      "clasificacion": "Comida",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Copilot",
+      "clasificacion": "Ocio",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Chocolates",
+      "clasificacion": "Rosario",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Cafe Deli",
+      "clasificacion": "Comida",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "After Office Dani Silva",
+      "clasificacion": "Social",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Cafe y Sopas Lider",
+      "clasificacion": "Comida",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Chat GPT",
+      "clasificacion": "Ocio",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Almuerzo Matarello Rosario",
+      "clasificacion": "Rosario",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Protector Metatarso + Pilas",
+      "clasificacion": "Otros",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Flores cumple Mes",
+      "clasificacion": "Rosario",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Hockey Jersey",
+      "clasificacion": "Souvenir",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Preply Portugues",
+      "clasificacion": "Estudio",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Corte de pelo",
+      "clasificacion": "Higiene",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Afteroffice Ausenco",
+      "clasificacion": "Social",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Uber cumple conejo",
+      "clasificacion": "Transporte",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Almuerzo Tempura Rosario",
+      "clasificacion": "Rosario",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Alexia Forte",
+      "clasificacion": "Salud",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Desconocido",
+      "clasificacion": "Otros",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Estacionamiendo Dmoov",
+      "clasificacion": "Transporte",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Estacionamiento Achs",
+      "clasificacion": "Transporte",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Pichanga Ausenco",
+      "clasificacion": "Fit",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Padel Conecta",
+      "clasificacion": "Fit",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Yogur Prote",
+      "clasificacion": "Comida",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Desconocido",
+      "clasificacion": "Otros",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Libros Frances",
+      "clasificacion": "Estudio",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Aguinaldo",
+      "clasificacion": "Sueldo",
+      "tipo": null,
+      "count": 1
+    },
+    {
+      "descripcion": "Clases Ingles x4",
+      "clasificacion": "Estudio",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Almuerzo Cevichazo Rosario",
+      "clasificacion": "Rosario",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Gatorade Rosario",
+      "clasificacion": "Rosario",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Padel Vale Sepulveda",
+      "clasificacion": "Fit",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Almuerzo Oxxo",
+      "clasificacion": "Almuerzo",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Antiparras",
+      "clasificacion": "Nieve",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Agua Club Arrieta",
+      "clasificacion": "Comida",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Padel Arrieta",
+      "clasificacion": "Fit",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Pastillas Propoleo",
+      "clasificacion": "Salud",
+      "tipo": "Necesidad",
+      "count": 1
+    }
+  ],
+  "transcription_prompt": "Gastos personales en Chile, pesos chilenos. Vocabulario posible: Dmoov, Spid, Brutal, Cepar, Epadel, Oxxo, Mut, Ausenco, Wellhub, Preply, Entel, PiscolaBot, Ferrero Rocher, DAP, pádel, filamento de impresora 3D, tornillos M3. Transcribe solo lo que se escucha; no completes nombres ni montos a partir de esta lista."
+}

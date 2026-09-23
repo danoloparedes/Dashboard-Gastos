@@ -1,18 +1,27 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import AssistantAccess from '../components/AssistantAccess.vue'
 import { authenticated } from '../services/auth'
 import {
   interpretVoiceTranscript,
   fetchVoiceConfig,
   saveVoiceDraft,
-  transcribeVoiceAudio,
-  transcribeVoiceText
+  transcribeVoiceAudio
 } from '../services/api'
 
 defineEmits(['go-home'])
 
-const status = ref('Listo para grabar')
+const status = ref('Cuéntame qué compraste y cuánto pagaste.')
+const starting = ref(false)
+const seconds = ref(0)
+let timer = null
+const hasDraft = ref(false)
+const busy = computed(() => processing.value || saving.value || starting.value)
+const money = n => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n)
+const direction = ref('gasto')
+const amount = computed({ get: () => draft.value[direction.value], set: n => { draft.value[direction.value] = Number(n); draft.value[direction.value === 'gasto' ? 'abono' : 'gasto'] = 0 } })
+const changeDirection = () => { const total = draft.value.gasto || draft.value.abono; draft.value.gasto = 0; draft.value.abono = 0; draft.value[direction.value] = total }
+const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date())
 const error = ref('')
 const processing = ref(false)
 const saving = ref(false)
@@ -28,7 +37,7 @@ const transcript = ref('')
 const transcriptionMeta = ref(null)
 const interpretationMeta = ref(null)
 const draft = ref({
-  fecha: new Date().toISOString().slice(0, 10),
+  fecha: today(),
   descripcion: '',
   clasificacion: 'General',
   tipo: 'Necesidad',
@@ -36,6 +45,17 @@ const draft = ref({
   gasto: 0
 })
 const savedMessage = ref('')
+const labels = { fecha: 'Fecha', descripcion: 'Descripcion', clasificacion: 'Clasificacion', tipo: 'Tipo', abono: 'Abono', gasto: 'Gasto' }
+const categories = ['Celular', 'Comida', 'Dap', 'Dpto', 'Estudio', 'Fit', 'Higiene', 'Nieve', 'Ocio', 'Otros', 'Rosario', 'Salud', 'Social', 'Souvenir', 'Sueldo', 'Transporte', 'General']
+const reviewNotes = computed(() => interpretationMeta.value?.review_notes || [])
+const inferred = computed(() => (interpretationMeta.value?.inferred_fields || []).map(field => labels[field]).filter(Boolean))
+const interpretedText = ref('')
+const stale = computed(() => !!interpretedText.value && transcript.value.trim() !== interpretedText.value)
+const validDraft = computed(() => draft.value.descripcion.trim() && draft.value.clasificacion.trim() && draft.value.fecha &&
+  [draft.value.abono, draft.value.gasto].every(n => Number.isSafeInteger(n) && n >= 0) &&
+  ((draft.value.abono > 0) !== (draft.value.gasto > 0)))
+watch(draft, () => { savedMessage.value = '' }, { deep: true })
+
 
 const isRecording = ref(false)
 const supportsGetUserMedia = computed(() => !!navigator.mediaDevices?.getUserMedia)
@@ -49,10 +69,12 @@ const audioUrl = ref('')
 
 let mediaRecorder = null
 let chunks = []
+let disposed = false
 
 const updateDraft = (nextDraft) => {
+  direction.value = Number(nextDraft.abono || 0) > 0 ? 'abono' : 'gasto'
   draft.value = {
-    fecha: nextDraft.fecha || new Date().toISOString().slice(0, 10),
+    fecha: nextDraft.fecha || today(),
     descripcion: nextDraft.descripcion || '',
     clasificacion: nextDraft.clasificacion || 'General',
     tipo: nextDraft.tipo || 'Necesidad',
@@ -70,13 +92,20 @@ const clearAudio = () => {
 }
 
 const loadAudioBlob = (blob) => {
+  hasDraft.value = false
+  savedMessage.value = ''
+  transcript.value = ''
+  interpretedText.value = ''
+  interpretationMeta.value = null
+  transcriptionMeta.value = null
+  updateDraft({})
   clearAudio()
   audioBlob.value = blob
   audioUrl.value = URL.createObjectURL(blob)
   status.value = 'Audio listo. Puedes procesarlo.'
 }
 
-const onAudioFileSelected = (event) => {
+const onAudioFileSelected = async (event) => {
   const input = event?.target
   const file = input?.files?.[0]
   if (!file) {
@@ -84,9 +113,12 @@ const onAudioFileSelected = (event) => {
   }
 
   loadAudioBlob(file)
+  event.target.value = ''
+  await transcribeAudio()
 }
 
 const startRecording = async () => {
+  if (busy.value || isRecording.value) return
   error.value = ''
   savedMessage.value = ''
   transcriptionMeta.value = null
@@ -102,8 +134,11 @@ const startRecording = async () => {
     return
   }
 
+  starting.value = true
+  let stream
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    if (disposed) { stream.getTracks().forEach(track => track.stop()); return }
     chunks = []
     const mimeType = ['audio/webm', 'audio/mp4'].find((type) => MediaRecorder.isTypeSupported(type))
     mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
@@ -114,21 +149,25 @@ const startRecording = async () => {
       }
     })
 
-    mediaRecorder.addEventListener('stop', () => {
-      const blob = new Blob(chunks, { type: mediaRecorder.mimeType || chunks[0]?.type || 'audio/webm' })
-      clearAudio()
-      audioBlob.value = blob
-      audioUrl.value = URL.createObjectURL(blob)
+    mediaRecorder.addEventListener('stop', async () => {
+      clearInterval(timer)
+      isRecording.value = false
       stream.getTracks().forEach((track) => track.stop())
-      status.value = 'Audio grabado. Puedes procesarlo.'
+      if (disposed) return
+      const blob = new Blob(chunks, { type: mediaRecorder.mimeType || chunks[0]?.type || 'audio/webm' })
+      loadAudioBlob(blob)
+      await transcribeAudio()
     })
 
+    seconds.value = 0
     mediaRecorder.start()
+    timer = setInterval(() => { seconds.value++; if (seconds.value >= 120) stopRecording() }, 1000)
     isRecording.value = true
     status.value = 'Grabando audio...'
   } catch (err) {
+    stream?.getTracks().forEach(track => track.stop())
     error.value = err instanceof Error ? err.message : 'No se pudo iniciar la grabacion.'
-  }
+  } finally { starting.value = false }
 }
 
 const stopRecording = () => {
@@ -136,15 +175,17 @@ const stopRecording = () => {
     return
   }
   mediaRecorder.stop()
-  isRecording.value = false
+  processing.value = true
 }
 
 const transcribeAudio = async () => {
   if (!audioBlob.value) {
+    processing.value = false
     error.value = 'Primero graba un audio o usa texto manual.'
     return
   }
   if (voiceConfig.value && audioBlob.value.size > voiceConfig.value.max_audio_bytes) {
+    processing.value = false
     error.value = `El audio supera el limite de ${voiceConfig.value.max_audio_bytes / 1000000} MB. Graba un mensaje mas corto.`
     return
   }
@@ -152,19 +193,16 @@ const transcribeAudio = async () => {
   processing.value = true
   error.value = ''
   savedMessage.value = ''
-  status.value = 'Transcribiendo audio con OpenAI...'
+  status.value = 'Escuchando tu audio…'
 
   try {
     const result = await transcribeVoiceAudio(audioBlob.value)
     transcript.value = result.transcript || ''
     transcriptionMeta.value = result?.meta || null
     interpretationMeta.value = null
-    const engine = result?.meta?.transcription_engine || 'desconocido'
-    const elapsed = result?.meta?.elapsed_ms
-    status.value =
-      typeof elapsed === 'number'
-        ? `Transcripcion lista (${engine}, ${elapsed} ms). Ahora interpreta el texto.`
-        : `Transcripcion lista (${engine}). Ahora interpreta el texto.`
+    status.value = 'Preparando tu gasto…'
+    await fillFromText()
+
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'No se pudo transcribir el audio.'
   } finally {
@@ -181,18 +219,10 @@ const interpretText = async () => {
   processing.value = true
   error.value = ''
   savedMessage.value = ''
-  status.value = 'Interpretando texto con OpenAI...'
+  status.value = 'Preparando tu gasto…'
 
   try {
-    const result = await interpretVoiceTranscript(transcript.value.trim())
-    updateDraft(result.draft || {})
-    interpretationMeta.value = result?.meta || null
-    const engine = result?.meta?.interpretation_engine || 'desconocido'
-    const elapsed = result?.meta?.elapsed_ms
-    status.value =
-      typeof elapsed === 'number'
-        ? `Interpretacion lista (${engine}, ${elapsed} ms). Revisa y confirma el gasto.`
-        : `Interpretacion lista (${engine}). Revisa y confirma el gasto.`
+    await fillFromText()
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'No se pudo interpretar el texto.'
   } finally {
@@ -200,37 +230,18 @@ const interpretText = async () => {
   }
 }
 
-const transcribeManualText = async () => {
-  if (!transcript.value.trim()) {
-    error.value = 'Escribe texto para simular la etapa de transcripcion.'
-    return
-  }
-
-  processing.value = true
-  error.value = ''
-  savedMessage.value = ''
-  status.value = 'Registrando texto manual como transcripcion...'
-
-  try {
-    const result = await transcribeVoiceText(transcript.value.trim())
-    transcript.value = result.transcript || transcript.value
-    transcriptionMeta.value = result?.meta || { transcription_engine: 'text-override' }
-    if (!transcriptionMeta.value?.elapsed_ms) {
-      transcriptionMeta.value = {
-        ...(transcriptionMeta.value || {}),
-        elapsed_ms: 0,
-        transcription_engine: transcriptionMeta.value?.transcription_engine || 'text-override'
-      }
-    }
-    status.value = 'Texto manual listo como transcripcion. Ahora interpreta el texto.'
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'No se pudo registrar el texto manual.'
-  } finally {
-    processing.value = false
-  }
+const fillFromText = async () => {
+  const text = transcript.value.trim()
+  const result = await interpretVoiceTranscript(text)
+  updateDraft(result.draft || {})
+  hasDraft.value = true
+  interpretedText.value = text
+  interpretationMeta.value = result.meta || null
+  status.value = '¿Está todo bien?'
 }
 
 const saveDraft = async () => {
+  if (!validDraft.value || stale.value || processing.value || saving.value || isRecording.value || savedMessage.value) return
   saving.value = true
   error.value = ''
   savedMessage.value = ''
@@ -248,124 +259,124 @@ const saveDraft = async () => {
 }
 
 onUnmounted(() => {
+  disposed = true
+  clearInterval(timer)
+  if (mediaRecorder) {
+    if (mediaRecorder.state === 'recording') mediaRecorder.stop()
+    mediaRecorder.stream.getTracks().forEach(track => track.stop())
+  }
   clearAudio()
 })
 </script>
 
 <template>
-  <main class="capture-wrap">
-    <header class="capture-header">
-      <button class="btn-secondary" @click="$emit('go-home')">Volver</button>
-      <h1>Registro por voz</h1>
+  <main class="voice-mobile">
+    <header class="voice-top">
+      <button class="voice-back" aria-label="Volver al inicio" @click="$emit('go-home')">←</button>
+      <div><span class="voice-eyebrow">TUS GASTOS, AL DÍA</span><h1>Registra y sigue</h1></div>
     </header>
+    <AssistantAccess compact />
+    <template v-if="authenticated">
+      <section v-if="savedMessage" class="voice-success" role="status">
+        <span class="voice-check">✓</span><h2>Listo, guardado</h2>
+        <p>{{ draft.descripcion }}</p><strong>{{ money(draft.gasto || draft.abono) }}</strong>
+        <p v-if="saveTarget === 'sheets'" class="voice-muted">Sincroniza el dashboard para verlo allí.</p>
+        <button class="btn-primary" @click="savedMessage = ''; hasDraft = false; transcript = ''; interpretedText = ''; interpretationMeta = null; updateDraft({}); clearAudio()">Registrar otro</button>
+      </section>
+      <template v-else>
+        <section class="voice-recorder" :class="{ recording: isRecording }" :aria-busy="busy">
+          <button class="voice-mic" :disabled="busy || !voiceConfig || !canRecord" :aria-label="isRecording ? 'Terminar grabación y procesar' : 'Grabar gasto'" :aria-pressed="isRecording" @click="isRecording ? stopRecording() : startRecording()">
+            <span v-if="processing || starting" class="voice-spinner" aria-hidden="true"></span>
+            <span v-else-if="isRecording" class="voice-stop" aria-hidden="true"></span>
+            <svg v-else width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg>
+          </button>
+          <div aria-live="polite">
+            <h2>{{ isRecording ? `Grabando · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : processing ? 'Un momento…' : starting ? 'Abriendo micrófono…' : hasDraft ? '¿Otro audio?' : 'Toca y cuéntame' }}</h2>
+            <p>{{ isRecording ? 'Toca para terminar.' : processing ? status : hasDraft ? 'Puedes volver a grabar.' : 'Qué compraste, dónde y cuánto.' }}</p>
+          </div>
+        </section>
+        <p v-if="!canRecord" class="voice-muted">Usa HTTPS para grabar, o adjunta un audio abajo.</p>
+        <p v-if="error" class="capture-error" role="alert">{{ error }}</p>
+        <button v-if="error && audioBlob && !hasDraft" class="voice-link" :disabled="busy || isRecording" @click="transcript ? interpretText() : transcribeAudio()">Reintentar</button>
 
-    <AssistantAccess />
-    <section v-if="authenticated" class="capture-card">
-      <p class="capture-status">{{ status }}</p>
+        <form v-if="hasDraft" class="voice-summary" @submit.prevent="saveDraft">
+          <div class="voice-section-title"><h2>Revisa tu movimiento</h2><span>Editable</span></div>
+          <fieldset :disabled="busy || isRecording">
+            <label class="voice-description">Descripción<textarea v-model="draft.descripcion" rows="2" maxlength="500" placeholder="¿En qué gastaste?" /></label>
+            <div class="voice-amount-row">
+              <select v-model="direction" aria-label="Gasto o ingreso" @change="changeDirection"><option value="gasto">Gasto</option><option value="abono">Ingreso</option></select>
+              <label><span class="sr-only">Monto en pesos chilenos</span><span aria-hidden="true">$</span><input v-model.number="amount" type="number" inputmode="numeric" min="1" step="1" placeholder="0" /></label>
+            </div>
+            <div class="voice-small-fields">
+              <label>Fecha<input v-model="draft.fecha" type="date" /></label>
+              <label>Tipo<select v-model="draft.tipo"><option>Necesidad</option><option>Antojo</option><option>Ahorro</option></select></label>
+              <label class="voice-category">Categoría<input v-model="draft.clasificacion" list="expense-categories" /><datalist id="expense-categories"><option v-for="category in categories" :key="category" :value="category" /></datalist></label>
+            </div>
+          </fieldset>
+          <div v-if="reviewNotes.length" class="voice-warning" role="status"><p v-for="note in reviewNotes" :key="note">{{ note }}</p></div>
+          <p v-if="stale" class="capture-error">Actualiza el formulario con el texto corregido antes de guardar.</p>
+          <p v-if="!validDraft" class="voice-muted">Completa la descripción, categoría y monto.</p>
+          <button class="btn-primary voice-save" :disabled="busy || isRecording || !saveTarget || !validDraft || stale">{{ saving ? 'Guardando…' : 'Guardar movimiento' }}</button>
+        </form>
 
-      <div class="capture-actions">
-        <button class="btn-primary" :disabled="isRecording || processing" @click="startRecording">
-          Iniciar grabacion
-        </button>
-        <button class="btn-secondary" :disabled="!isRecording" @click="stopRecording">
-          Detener
-        </button>
-        <button class="btn-secondary" :disabled="!voiceConfig || !audioBlob || processing" @click="transcribeAudio">
-          1) Transcribir audio
-        </button>
-      </div>
-
-      <label class="capture-field">
-        O subir audio (fallback celular)
-        <input type="file" accept="audio/*" capture="user" @change="onAudioFileSelected" />
-        <span v-if="voiceConfig">Maximo {{ voiceConfig.max_audio_bytes / 1000000 }} MB por audio.</span>
-      </label>
-
-      <p v-if="!isSecureContextOk" class="capture-note">
-        La grabacion directa requiere HTTPS en celular. Si estas entrando por http://IP, usa HTTPS o sube audio.
-      </p>
-
-      <audio v-if="audioUrl" class="capture-player" :src="audioUrl" controls />
-
-      <label class="capture-field">
-        Texto (editable)
-        <textarea
-          v-model="transcript"
-          rows="4"
-          placeholder="Ej: gaste 12500 en supermercado tipo necesidad hoy"
-        />
-      </label>
-
-      <button class="btn-secondary" :disabled="processing" @click="transcribeManualText">
-        1) Usar texto manual como transcripcion
-      </button>
-
-      <button class="btn-secondary" :disabled="processing || !transcript.trim()" @click="interpretText">
-        2) Interpretar texto
-      </button>
-
-      <div class="capture-stage-grid">
-        <p class="capture-stage" v-if="transcriptionMeta">
-          Transcripcion: {{ transcriptionMeta.transcription_engine || 'desconocido' }} -
-          {{ transcriptionMeta.elapsed_ms ?? '-' }} ms
-        </p>
-        <p class="capture-stage" v-if="interpretationMeta">
-          Interpretacion: {{ interpretationMeta.interpretation_engine || 'desconocido' }} -
-          {{ interpretationMeta.elapsed_ms ?? '-' }} ms
-        </p>
-      </div>
-
-      <div class="capture-grid">
-        <label>
-          Fecha
-          <input v-model="draft.fecha" type="date" />
-        </label>
-        <label>
-          Tipo
-          <select v-model="draft.tipo">
-            <option>Ahorro</option>
-            <option>Antojo</option>
-            <option>Necesidad</option>
-          </select>
-        </label>
-      </div>
-
-      <label class="capture-field">
-        Descripcion
-        <input v-model="draft.descripcion" type="text" />
-      </label>
-
-      <label class="capture-field">
-        Clasificacion
-        <input v-model="draft.clasificacion" type="text" />
-      </label>
-
-      <div class="capture-grid">
-        <label>
-          Abono
-          <input v-model.number="draft.abono" type="number" min="0" step="1" />
-        </label>
-        <label>
-          Gasto
-          <input v-model.number="draft.gasto" type="number" min="0" step="1" />
-        </label>
-      </div>
-
-      <label class="capture-field">
-        Destino de guardado
-        <select v-model="saveTarget">
-          <option v-for="target in voiceConfig?.targets || []" :key="target.value" :value="target.value">
-            {{ target.label }}
-          </option>
-        </select>
-      </label>
-
-      <button class="btn-primary" :disabled="saving || !saveTarget" @click="saveDraft">
-        {{ saving ? 'Guardando...' : 'Confirmar y guardar' }}
-      </button>
-
-      <p v-if="error" class="capture-error">{{ error }}</p>
-      <p v-if="savedMessage" class="capture-ok">{{ savedMessage }}</p>
-    </section>
+        <details class="voice-options">
+          <summary>{{ hasDraft ? 'Audio, texto y opciones' : 'O escribe / adjunta un audio' }}</summary>
+          <div class="voice-options-body">
+            <label class="capture-field">Adjuntar audio<input type="file" :disabled="busy || isRecording || !voiceConfig" accept="audio/*" @change="onAudioFileSelected" /><small v-if="voiceConfig">Hasta {{ voiceConfig.max_audio_bytes / 1000000 }} MB</small></label>
+            <audio v-if="audioUrl" :src="audioUrl" controls class="capture-player" />
+            <label class="capture-field">Texto<textarea v-model="transcript" :disabled="busy || isRecording" rows="3" placeholder="Gasté tres lucas en un café" /></label>
+            <button class="btn-secondary" :disabled="busy || isRecording || !transcript.trim()" @click="interpretText">{{ hasDraft ? 'Actualizar formulario' : 'Completar con texto' }}</button>
+            <label class="capture-field">Guardar en<select v-model="saveTarget" :disabled="busy || isRecording"><option v-for="target in voiceConfig?.targets || []" :key="target.value" :value="target.value">{{ target.label }}</option></select></label>
+            <p v-if="inferred.length" class="voice-muted">Sugeridos: {{ inferred.join(', ') }}.</p>
+          </div>
+        </details>
+      </template>
+    </template>
   </main>
 </template>
+
+<style scoped>
+.voice-mobile { width: min(100% - 32px, 460px); margin: 0 auto; padding: 22px 0 max(28px, env(safe-area-inset-bottom)); }
+.voice-top { display:flex; gap:14px; align-items:center; margin-bottom:12px; }
+.voice-back { width:44px; height:44px; border:1px solid var(--border); border-radius:50%; background:var(--paper); font-size:22px; }
+.voice-eyebrow { font-size:10px; letter-spacing:1.7px; color:var(--muted); }
+.voice-top h1 { font-size:24px; margin:3px 0 0; }
+.voice-recorder { display:flex; align-items:center; gap:18px; padding:24px 4px; }
+.voice-recorder h2 { font-size:18px; margin:0 0 6px; }
+.voice-recorder p,.voice-muted { font-size:13px; color:var(--muted); line-height:1.5; }
+.voice-mic { flex-shrink:0; width:76px; height:76px; border:0; border-radius:50%; background:#174c46; color:white; display:grid; place-items:center; box-shadow:0 5px 20px #174c4625; }
+.voice-mic:disabled { opacity:.6; }
+.recording .voice-mic { background:#ac3e35; box-shadow:0 0 0 7px #ac3e3515; }
+.voice-stop { width:23px; height:23px; border-radius:5px; background:white; }
+.voice-spinner { width:25px; height:25px; border:3px solid #ffffff55; border-top-color:white; border-radius:50%; animation:spin 1s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .voice-spinner { animation:none; } }
+.voice-summary { border:1px solid var(--border); background:var(--paper); border-radius:22px; padding:20px; box-shadow:0 8px 26px #1f2a3706; }
+.voice-section-title { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.voice-section-title h2 { font-size:15px; }
+.voice-section-title span { font-size:11px; color:var(--muted); }
+fieldset { padding:0; border:0; margin:0; min-width:0; }
+label { display:grid; gap:6px; font-size:12px; color:var(--muted); min-width:0; }
+input,select,textarea { width:100%; min-width:0; box-sizing:border-box; font:inherit; font-size:16px; color:var(--ink); background:#f6f4ed; border:1px solid transparent; border-radius:10px; padding:11px; }
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,summary:focus-visible { outline:2px solid #287d70; outline-offset:3px; }
+textarea { resize:vertical; line-height:1.4; }
+.voice-description textarea { font-size:18px; background:transparent; padding:4px 0; border-radius:0; }
+.voice-amount-row { display:flex; gap:12px; align-items:center; border-top:1px solid var(--border); border-bottom:1px solid var(--border); margin:12px 0 16px; padding:12px 0; }
+.voice-amount-row select { width:106px; font-size:14px; }
+.voice-amount-row label { display:flex; align-items:center; flex:1; font-size:24px; color:var(--ink); }
+.voice-amount-row input { background:transparent; padding:5px; font-size:27px; font-weight:600; }
+.voice-small-fields { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.voice-category { grid-column:1/-1; }
+.voice-save { width:100%; min-height:50px; margin-top:18px; border-radius:12px; background:#174c46; color:white; }
+.voice-warning { background:#fff0ce; border-radius:10px; padding:10px 12px; margin-top:12px; font-size:13px; line-height:1.5; }
+.voice-warning p+p { margin-top:5px; }
+.voice-options { margin-top:18px; font-size:13px; color:var(--muted); }
+.voice-options summary { cursor:pointer; padding:12px 0; min-height:44px; }
+.voice-options-body { display:grid; gap:14px; padding:12px 0; }
+.voice-link { border:0; background:transparent; text-decoration:underline; min-height:44px; color:#174c46; }
+.voice-success { display:grid; gap:14px; text-align:center; justify-items:center; padding:36px 20px; }
+.voice-check { display:grid; place-items:center; width:64px; height:64px; border-radius:50%; background:#dcefe3; color:#174c46; font-size:30px; }
+.voice-success h2 { font-size:23px; }.voice-success strong { font-size:30px; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+button { cursor:pointer; }button:disabled { cursor:default; }
+</style>

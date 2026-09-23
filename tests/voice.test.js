@@ -48,6 +48,7 @@ test('multipart audio bytes and filename reach OpenAI intact', async t => {
     assert.equal(url, 'https://api.openai.com/v1/audio/transcriptions')
     assert.equal(options.headers.Authorization, 'Bearer test-key')
     assert.equal(options.body.get('file').name, 'voice.mp4')
+    assert.ok(options.body.get('prompt').includes('Dmoov'))
     assert.deepEqual(new Uint8Array(await options.body.get('file').arrayBuffer()), new Uint8Array([0, 32, 13, 10, 255]))
     return Response.json({ text: 'Gaste 2500 en cafe' })
   })
@@ -65,6 +66,8 @@ test('combined endpoint transcribes and extracts a strict draft', async t => {
     const body = JSON.parse(options.body)
     assert.equal(body.input, 'Gaste 2500 en cafe')
     assert.equal(body.text.format.strict, true)
+    assert.ok(body.instructions.includes('Clase Ingles Olga'))
+    assert.ok(body.text.format.schema.required.includes('review_notes'))
     assert.equal(body.store, false)
     return completed()
   })
@@ -132,4 +135,20 @@ test('partial save explicitly reports that Sheets succeeded', async () => {
     appendVoiceToSheet: async () => ({ external_id: 'Gastos:42' }),
     upsertTransactions: async () => { throw new Error('db secret') }
   }), /No repitas el guardado/)
+})
+
+test('interpretation exposes inferred fields and preserves detailed descriptions', async t => {
+  env(t, 'OPENAI_API_KEY', 'test-key')
+  t.mock.method(globalThis, 'fetch', async () => completed({
+    ...draft, descripcion: 'Tornillos M3 25 mm Allen', clasificacion: 'Ocio', tipo: 'Antojo', gasto: 0,
+    inferred_fields: ['tipo', 'clasificacion'], review_notes: ['No se indico el monto.']
+  }))
+  const response = await interpret.fetch(json({ transcript: 'Compre tornillos M3 de 25 milimetros Allen' }))
+  assert.equal(response.status, 200)
+  const result = (await response.json()).result
+  assert.equal(result.draft.descripcion, 'Tornillos M3 25 mm Allen')
+  assert.equal(result.draft.gasto, 0)
+  assert.deepEqual(result.meta.inferred_fields, ['tipo', 'clasificacion'])
+  assert.ok(result.meta.review_notes.length > 0)
+  assert.equal(Object.keys(result.draft).length, 6)
 })

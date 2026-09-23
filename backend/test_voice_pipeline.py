@@ -44,6 +44,8 @@ class VoicePipelineTests(unittest.TestCase):
         return httpx.Response(200, json={'text': 'Gaste 2500 en cafe'})
       body = json.loads(request.content)
       self.assertEqual(body['input'], 'Gaste 2500 en cafe')
+      self.assertIn('Clase Ingles Olga', body['instructions'])
+      self.assertIn('inferred_fields', body['text']['format']['schema']['required'])
       self.assertTrue(body['text']['format']['strict'])
       self.assertFalse(body['store'])
       return self.response(self.draft)
@@ -56,6 +58,16 @@ class VoicePipelineTests(unittest.TestCase):
     with patch.object(voice, '_openai_client') as client:
       self.assertEqual(voice.transcribe_audio(b'', '', ' hola '), ('hola', 'text-override'))
       client.assert_not_called()
+
+  def test_review_metadata_and_missing_description(self):
+    raw = dict(self.draft, descripcion='', gasto=0, inferred_fields=['tipo'], review_notes=['Confirma el concepto.'])
+    with patch.object(voice, 'interpret_expense_text', return_value=raw):
+      result = voice.interpret_text_to_draft('no se entiende')
+    self.assertEqual(result['draft']['descripcion'], '')
+    self.assertEqual(result['meta']['inferred_fields'], ['tipo'])
+    self.assertIn('Indica el monto antes de guardar.', result['meta']['review_notes'])
+    with self.assertRaisesRegex(RuntimeError, 'descripcion'):
+      voice.save_draft(result['draft'], 'sqlite')
 
   def test_missing_key(self):
     with patch.dict(os.environ, {'OPENAI_API_KEY': ''}):

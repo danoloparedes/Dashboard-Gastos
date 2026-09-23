@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { authenticated, authError, refreshSession, changeSession } from '../services/auth'
 const password = ref('')
+defineProps({ compact: Boolean })
 const busy = ref(false)
 const error = ref('')
 onMounted(refreshSession)
@@ -15,7 +16,7 @@ async function submit(method) {
 </script>
 
 <template>
-  <section class="status-card">
+  <section :class="compact && authenticated ? 'access-compact' : 'status-card'">
     <form v-if="!authenticated" @submit.prevent="submit('POST')">
       <p>Ingresa tu contraseña para registrar gastos o sincronizar datos.</p>
       <label class="capture-field">
@@ -29,3 +30,8 @@ async function submit(method) {
     <p v-if="error || authError" role="alert" class="capture-error">{{ error || authError }}</p>
   </section>
 </template>
+
+<style scoped>
+.access-compact { display:flex; flex-wrap:wrap; justify-content:flex-end; }
+.access-compact button { border:0; background:transparent; padding:8px 0; font-size:12px; color:var(--muted); min-height:44px; box-shadow:none; }
+</style>

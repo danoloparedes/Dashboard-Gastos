@@ -241,6 +241,50 @@ Notas:
 
 ## Registro de gastos por voz (PWA)
 
+### Autocompletado basado en tu historial
+
+El asistente usa los patrones de 155 movimientos del archivo
+`gastos dashboard historico.xlsx`. La referencia resumida esta en
+`shared/expense-reference.json`: contiene descripciones, clasificaciones, tipos y
+frecuencias; no incluye fechas ni montos historicos. No importa esas filas a la base.
+`shared/expense-instructions.txt` contiene las reglas compartidas entre Vercel y Python.
+Ambos archivos se incluyen en el despliegue y el contexto se envia a OpenAI al interpretar.
+
+- Toca el microfono para grabar y vuelve a tocarlo para terminar: el audio se
+  transcribe y completa el formulario automaticamente. La grabacion termina a los
+  dos minutos para evitar audios largos por accidente.
+- Revisa descripcion, monto, fecha, tipo y categoria en una tarjeta compacta, y
+  pulsa **Guardar movimiento**. El selector Gasto/Ingreso determina la columna
+  correspondiente y mantiene la otra en cero.
+- En **Audio, texto y opciones** puedes escuchar el audio, corregir la transcripcion,
+  escribir directamente, adjuntar un archivo o cambiar el destino de guardado.
+- Conserva detalles utiles en la descripcion: concepto, comercio, persona, producto,
+  medida o periodo que realmente mencionaste. No agrega comercios o personas solo
+  porque aparecen en ejemplos anteriores.
+- Usa el contexto y las preferencias historicas para sugerir clasificacion y tipo.
+  Los datos explicitos prevalecen sobre el historial; las inconsistencias se indican
+  como dudas, no como reglas absolutas.
+- Los campos inferidos y avisos aparecen antes del formulario, que permanece editable.
+  No inventa montos ausentes; una descripcion vacia o ambos montos cero impiden guardar.
+- Las fechas relativas se interpretan en America/Santiago. En Windows, instala
+  `backend/requirements.txt` para contar con los datos de zona horaria.
+
+No hay variables nuevas en Vercel. Despliega tambien la carpeta `shared/`.
+La referencia es estatica: futuros cambios en Sheets no reentrenan ni actualizan
+automaticamente estos patrones. Las pruebas automatizadas comprueban contratos,
+validaciones y manejo de respuestas; la precision de reconocimiento requiere audios reales.
+
+Ejemplos para verificar antes de usarlo habitualmente:
+
+| Mensaje | Resultado esperado para revisar |
+| --- | --- |
+| Pague dos lucas en el estacionamiento de Dmoov | Estacionamiento Dmoov; Transporte; Necesidad; gasto 2000 |
+| Clase de ingles por quince lucas | Clase de ingles, sin inventar profesor; Estudio; Antojo; gasto 15000 |
+| Compre tornillos M3 de 25 milimetros Allen | Conservar medidas en descripcion; Ocio/Antojo sugeridos; pedir monto |
+| Me abonaron el sueldo de Ausenco por un millon | Sueldo Ausenco; Sueldo; abono 1000000; tipo inferido para revisar |
+| Compre una barra de proteina | Aviso de ambiguedad historica y monto pendiente |
+| Gaste 3000 en cafe, clasificalo como Necesidad | Respetar Necesidad explicitamente indicado |
+
 La app ahora incluye una vista movil para capturar gastos por voz:
 
 - Ruta: `/#/capture`

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dashboard-gastos-v6'
+const CACHE_NAME = 'dashboard-gastos-v8'
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.png']
 
 self.addEventListener('install', (event) => {
