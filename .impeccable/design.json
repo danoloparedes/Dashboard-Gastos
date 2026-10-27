@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-25T23:28:52.1957475-03:00",
+  "title": "Design System: Dashboard Gastos",
+  "extensions": {
+    "colorMeta": {
+      "navy": { "role": "primary", "displayName": "Ink Navy", "canonical": "#172b45", "tonalRamp": ["#08101b", "#101c2b", "#172b45", "#263e5a", "#405a76", "#71849a", "#b5c3d2", "#eef2f6"] },
+      "action-blue": { "role": "primary", "displayName": "Action Blue", "canonical": "#2864a9", "tonalRamp": ["#102d52", "#194575", "#2864a9", "#4a82bd", "#78a1cb", "#a6c0dc", "#d1e0ef", "#f1f6fb"] },
+      "savings-amber": { "role": "tertiary", "displayName": "Savings Amber", "canonical": "#c7831f", "tonalRamp": ["#38230b", "#6e4513", "#9c641b", "#c7831f", "#d89f49", "#e5bd7b", "#f0d9ad", "#fbf4e8"] },
+      "wants-coral": { "role": "secondary", "displayName": "Wants Coral", "canonical": "#c75356", "tonalRamp": ["#3b1718", "#702b2e", "#9f4043", "#c75356", "#d47678", "#e1a0a1", "#edc9ca", "#fbefef"] },
+      "needs-blue": { "role": "secondary", "displayName": "Needs Blue", "canonical": "#3679b8", "tonalRamp": ["#102a40", "#1d4b73", "#2864a0", "#3679b8", "#6498c6", "#94b6d5", "#c5d9ea", "#eff5fa"] },
+      "focus": { "role": "primary", "displayName": "Focus Blue", "canonical": "#2563a5", "tonalRamp": ["#102744", "#183e68", "#20588c", "#2563a5", "#5985bb", "#8fadd0", "#c3d3e5", "#edf3fa"] },
+      "surface-tint": { "role": "neutral", "displayName": "Tinted Surface", "canonical": "#e5f0f8", "tonalRamp": ["#142033", "#34445b", "#526178", "#8290a2", "#b7c1cc", "#d6e0ea", "#e5f0f8", "#ffffff"] },
+      "chart-track": { "role": "neutral", "displayName": "Chart Track", "canonical": "#e8eef4", "tonalRamp": ["#142033", "#34445b", "#526178", "#8290a2", "#b7c1cc", "#d6e0ea", "#e8eef4", "#ffffff"] },
+      "background": { "role": "neutral", "displayName": "Cool Ground", "canonical": "#f2f5f8", "tonalRamp": ["#142033", "#34445b", "#526178", "#8290a2", "#b7c1cc", "#d6e0ea", "#e8eef4", "#f2f5f8"] },
+      "surface": { "role": "neutral", "displayName": "Paper", "canonical": "#ffffff", "tonalRamp": ["#142033", "#34445b", "#526178", "#8290a2", "#b7c1cc", "#d6e0ea", "#f2f5f8", "#ffffff"] },
+      "surface-raised": { "role": "neutral", "displayName": "Raised Surface", "canonical": "#f7f9fb", "tonalRamp": ["#142033", "#34445b", "#526178", "#8290a2", "#b7c1cc", "#d6e0ea", "#e8eef4", "#f7f9fb"] },
+      "success-green": { "role": "secondary", "displayName": "Success Green", "canonical": "#187765", "tonalRamp": ["#082b25", "#10483e", "#126252", "#187765", "#4b9687", "#82b7ad", "#b8d8d2", "#e5f2ef"] },
+      "danger": { "role": "destructive", "displayName": "Danger Coral", "canonical": "#a53b3e", "tonalRamp": ["#351315", "#5c2023", "#812c30", "#a53b3e", "#c16a6c", "#d79b9c", "#e9c8c9", "#fae8e8"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "IBM Plex Sans", "purpose": "Headings and key financial figures." },
+      "body": { "displayName": "IBM Plex Sans", "purpose": "Interface labels, movement descriptions, and supporting copy." }
+    },
+    "shadows": [
+      { "name": "recorder", "value": "0 5px 16px rgba(23, 43, 69, 0.19)", "purpose": "Voice recorder control only." }
+    ],
+    "breakpoints": [
+      { "name": "tablet", "value": "960px" },
+      { "name": "mobile", "value": "680px" },
+      { "name": "compact-mobile", "value": "360px" }
+    ]
+  },
+  "components": [
+    { "name": "Primary Button", "kind": "button", "refersTo": "button-primary", "description": "Navy action with white label.", "html": "<button class=\"ds-button-primary\">Agregar movimiento</button>", "css": ".ds-button-primary { background: #172b45; color: #fff; min-height: 44px; padding: 0.72rem 1.15rem; border: 0; border-radius: 8px; font: 700 1rem 'IBM Plex Sans', sans-serif; } .ds-button-primary:hover { background: #234568; } .ds-button-primary:focus-visible { outline: 3px solid #2563a5; outline-offset: 3px; }" },
+    { "name": "Chart Readout", "kind": "custom", "description": "Persistent exact-value detail for the focused or tapped chart point.", "html": "<div class=\"ds-chart-readout\"><strong>Octubre 2026</strong><span>Necesidad <b>$45.000</b></span></div>", "css": ".ds-chart-readout { display: flex; align-items: center; gap: 16px; min-height: 42px; padding: 8px 12px; border: 1px solid #d6e0ea; border-radius: 10px; background: #f7f9fb; color: #142033; font: 400 0.8rem 'IBM Plex Sans', sans-serif; } .ds-chart-readout b { font-weight: 700; font-variant-numeric: tabular-nums; }" }
+  ],
+  "narrative": {
+    "northStar": "The Financial Score",
+    "overview": "A light, precise finance workspace that lets the owner scan period totals, category movement, and exact values on phone or computer. IBM Plex Sans, an ink-navy frame, and distinct chart series keep the visual system clear without decorative noise.",
+    "keyCharacteristics": ["Cool paper surfaces with navy structure.", "Amber, coral, and blue series with visible labels.", "Exact CLP readouts on hover and on focused or tapped month/day columns."],
+    "rules": [{ "name": "The Series Rule", "body": "Every chart series has a matching visible label; color reinforces the category but does not replace its name or exact value.", "section": "colors" }],
+    "dos": ["Do preserve financial calculations and label periods explicitly.", "Do keep chart detail reachable without hover."],
+    "donts": ["Don't rely on color alone or truncate exact amounts.", "Don't add invented transaction values."]
+  }
+}

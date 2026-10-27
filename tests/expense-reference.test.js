@@ -6,12 +6,13 @@ import { validateDraft } from '../api/_lib/voice.js'
 
 const profile = JSON.parse(readFileSync(new URL('../shared/expense-reference.json', import.meta.url), 'utf8'))
 test('reference retains real preferences and conflicting examples without financial history', () => {
-  assert.equal(profile.movements, 155)
+  assert.match(profile.source, /julio-octubre 2026/)
   assert.ok(profile.patterns.some(row => row.descripcion === 'Clase Ingles Olga' && row.tipo === 'Antojo'))
   assert.ok(profile.patterns.some(row => row.descripcion === 'Sueldo Ausenco' && row.tipo === null))
   assert.equal(profile.patterns.filter(row => row.descripcion === 'Barra Proteina').length, 2)
   for (const row of profile.patterns) assert.deepEqual(Object.keys(row).sort(), ['clasificacion', 'count', 'descripcion', 'tipo'])
-  for (const category of ['Dap', 'Celular', 'Salud', 'Souvenir', 'Nieve']) assert.ok(profile.categories.includes(category))
+  for (const category of ['Dap', 'Celular', 'Salud', 'Souvenir', 'Nieve', 'Hogar', 'Regalo']) assert.ok(profile.categories.includes(category))
+  assert.ok(profile.patterns.some(row => row.descripcion === 'Github' && row.clasificacion === 'Ocio'))
 })
 test('prompt carries Santiago date, naming guidance, uncertainty and historical examples', () => {
   const prompt = expenseInstructions('2026-09-22')
@@ -19,8 +20,11 @@ test('prompt carries Santiago date, naming guidance, uncertainty and historical 
   assert.ok(prompt.includes('Tornillos M3 25 mm Allen'))
   assert.ok(prompt.includes('NO inventes "Olga"'))
   assert.ok(prompt.includes('varios movimientos independientes'))
+  assert.ok(prompt.includes('Hogar/Necesidad'))
+  assert.ok(prompt.includes('Arriendo Dpto'))
   assert.ok(prompt.includes('No inventes') || prompt.includes('Nunca copies precios'))
   assert.ok(transcriptionPrompt.includes('Dmoov'))
+  assert.ok(transcriptionPrompt.includes('gastos comunes'))
 })
 test('incomplete interpretation remains editable but cannot be saved', () => {
   const draft = validateDraft({ fecha: '2026-09-22', descripcion: '', clasificacion: 'Otros', tipo: 'Necesidad', abono: 0, gasto: 0 })

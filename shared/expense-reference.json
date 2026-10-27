@@ -1,8 +1,8 @@
 {
-  "source": "gastos dashboard historico.xlsx",
-  "movements": 155,
+  "source": "seleccion de patrones del historial compartido (julio-octubre 2026); no incluye montos ni fechas",
   "categories": [
     "Almuerzo",
+    "Casa",
     "Celular",
     "Comida",
     "Dap",
@@ -11,9 +11,11 @@
     "Fit",
     "General",
     "Higiene",
+    "Hogar",
     "Nieve",
     "Ocio",
     "Otros",
+    "Regalo",
     "Rosario",
     "Salud",
     "Social",
@@ -140,13 +142,13 @@
       "descripcion": "Entel",
       "clasificacion": "Celular",
       "tipo": "Necesidad",
-      "count": 2
+      "count": 3
     },
     {
       "descripcion": "Almuerzo Oxxo",
       "clasificacion": "Comida",
       "tipo": "Necesidad",
-      "count": 2
+      "count": 6
     },
     {
       "descripcion": "Flores Rosario",
@@ -224,7 +226,7 @@
       "descripcion": "Estacionamiento Mut",
       "clasificacion": "Transporte",
       "tipo": "Necesidad",
-      "count": 1
+      "count": 2
     },
     {
       "descripcion": "Papel Lija",
@@ -326,7 +328,7 @@
       "descripcion": "Chat GPT",
       "clasificacion": "Ocio",
       "tipo": "Antojo",
-      "count": 1
+      "count": 2
     },
     {
       "descripcion": "Almuerzo Matarello Rosario",
@@ -495,7 +497,37 @@
       "clasificacion": "Salud",
       "tipo": "Necesidad",
       "count": 1
+    },
+    {
+      "descripcion": "Clases Frances",
+      "clasificacion": "Estudio",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Github",
+      "clasificacion": "Ocio",
+      "tipo": "Antojo",
+      "count": 1
+    },
+    {
+      "descripcion": "Regalo Papa",
+      "clasificacion": "Regalo",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Consulta Doctor Uc Christus",
+      "clasificacion": "Salud",
+      "tipo": "Necesidad",
+      "count": 1
+    },
+    {
+      "descripcion": "Clases Portugues",
+      "clasificacion": "Estudio",
+      "tipo": "Antojo",
+      "count": 1
     }
   ],
-  "transcription_prompt": "Gastos personales en Chile, pesos chilenos. Vocabulario posible: Dmoov, Spid, Brutal, Cepar, Epadel, Oxxo, Mut, Ausenco, Wellhub, Preply, Entel, PiscolaBot, Ferrero Rocher, DAP, pádel, filamento de impresora 3D, tornillos M3. Transcribe solo lo que se escucha; no completes nombres ni montos a partir de esta lista."
+  "transcription_prompt": "Movimientos personales en Chile, pesos chilenos. Vocabulario posible: Dmoov, Spid, Oxxo, Brutal, Cepar, Epadel, MUT, Ausenco, Wellhub, Entel, Unired, Preply, Rosario, PiscolaBot, ChatGPT, GitHub, Homecenter, DAP, pádel, filamento de impresora 3D, tornillos M3, arriendo, gastos comunes, luz, agua e internet hogar. Las palabras 'lucas' y 'mil' son montos si se pronuncian. Transcribe solo lo que se escucha: no completes comercios, productos, fechas ni montos a partir de esta lista."
 }

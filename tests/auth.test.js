@@ -73,7 +73,7 @@ test('OpenAI global quota blocks calls even with a valid session', async t => {
 })
 
 test('public transactions keep the same response shape without auth or new environment variables', async t => {
-  t.mock.method(pg.Pool.prototype, 'query', async sql => ({ rows: sql.includes('SELECT fecha') ? [{ fecha: '2026-09-21', abono: '0', gasto: '2500' }] : [] }))
+  t.mock.method(pg.Pool.prototype, 'query', async sql => ({ rows: sql.includes('SELECT id, fecha') ? [{ id: '1', fecha: '2026-09-21', abono: '0', gasto: '2500' }] : [] }))
   const old = process.env.POSTGRES_URL
   process.env.POSTGRES_URL = 'postgresql://localhost/test'
   t.after(() => { if (old === undefined) delete process.env.POSTGRES_URL; else process.env.POSTGRES_URL = old })

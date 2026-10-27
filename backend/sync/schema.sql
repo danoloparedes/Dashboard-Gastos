@@ -14,3 +14,4 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE INDEX IF NOT EXISTS idx_transactions_fecha ON transactions(fecha);
 CREATE INDEX IF NOT EXISTS idx_transactions_tipo ON transactions(tipo);
 CREATE INDEX IF NOT EXISTS idx_transactions_clasificacion ON transactions(clasificacion);
+CREATE TABLE IF NOT EXISTS sheet_protections (external_id TEXT PRIMARY KEY);

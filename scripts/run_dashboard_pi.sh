@@ -30,7 +30,11 @@ echo "$LOG_PREFIX Instalando dependencias frontend y compilando..."
 run_as_pi "cd '$REPO_DIR' && npm ci && npm run build"
 
 echo "$LOG_PREFIX Ejecutando sync Google Sheets -> SQLite..."
-run_as_pi "cd '$REPO_DIR/backend' && ../.venv/bin/python sync_google_sheet.py"
+if [ -f "$REPO_DIR/backend/.env" ] && grep -Eq '^[[:space:]]*GOOGLE_SHEETS_SPREADSHEET_ID[[:space:]]*=[[:space:]]*[^[:space:]#]+' "$REPO_DIR/backend/.env"; then
+  run_as_pi "cd '$REPO_DIR/backend' && ../.venv/bin/python sync_google_sheet.py"
+else
+  echo "$LOG_PREFIX Sin hoja configurada; usando SQLite directamente."
+fi
 
 echo "$LOG_PREFIX Publicando frontend en Nginx root..."
 mkdir -p /var/www/dashboard-gastos

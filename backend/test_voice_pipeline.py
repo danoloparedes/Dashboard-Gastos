@@ -1,6 +1,8 @@
 import json
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import httpx
@@ -100,6 +102,24 @@ class VoicePipelineTests(unittest.TestCase):
       with self.assertRaisesRegex(RuntimeError, 'monto'):
         voice.save_draft(draft, 'sqlite')
       save.assert_not_called()
+
+  def test_only_sqlite_is_accepted_for_voice_saves(self):
+    with patch.object(voice, 'save_to_sqlite', return_value={'external_id': 'voice:test'}) as save:
+      for target in ('sheets', 'both', 'postgres'):
+        with self.assertRaisesRegex(RuntimeError, 'solo en el dashboard'):
+          voice.save_draft(self.draft, target)
+      save.assert_not_called()
+      result = voice.save_draft(self.draft)
+      self.assertEqual(list(result['saved']), ['sqlite'])
+      save.assert_called_once()
+
+  def test_voice_save_creates_database_without_a_sheet_import(self):
+    with tempfile.TemporaryDirectory() as directory:
+      db_path = Path(directory) / 'new' / 'gastos.db'
+      with patch.object(voice, '_resolve_db_path', return_value=str(db_path)):
+        result = voice.save_draft(self.draft)
+      self.assertTrue(db_path.exists())
+      self.assertEqual(list(result['saved']), ['sqlite'])
 
   def test_audio_validation_before_api_call(self):
     with patch.object(voice, '_openai_client') as client:

@@ -9,7 +9,7 @@ import {
   transcribeVoiceAudio
 } from '../services/api'
 
-defineEmits(['go-home'])
+defineEmits(['go-home', 'go-dashboard'])
 
 const status = ref('Cuéntame qué compraste y cuánto pagaste.')
 const starting = ref(false)
@@ -25,12 +25,10 @@ const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santia
 const error = ref('')
 const processing = ref(false)
 const saving = ref(false)
-const saveTarget = ref('')
 const voiceConfig = ref(null)
 onMounted(async () => {
   try {
     voiceConfig.value = await fetchVoiceConfig()
-    saveTarget.value = voiceConfig.value.default_target
   } catch (err) { error.value = err.message }
 })
 const transcript = ref('')
@@ -46,7 +44,7 @@ const draft = ref({
 })
 const savedMessage = ref('')
 const labels = { fecha: 'Fecha', descripcion: 'Descripcion', clasificacion: 'Clasificacion', tipo: 'Tipo', abono: 'Abono', gasto: 'Gasto' }
-const categories = ['Celular', 'Comida', 'Dap', 'Dpto', 'Estudio', 'Fit', 'Higiene', 'Nieve', 'Ocio', 'Otros', 'Rosario', 'Salud', 'Social', 'Souvenir', 'Sueldo', 'Transporte', 'General']
+const categories = ['Casa', 'Celular', 'Comida', 'Dap', 'Dpto', 'Estudio', 'Fit', 'General', 'Higiene', 'Hogar', 'Nieve', 'Ocio', 'Otros', 'Regalo', 'Rosario', 'Salud', 'Social', 'Souvenir', 'Sueldo', 'Transporte']
 const reviewNotes = computed(() => interpretationMeta.value?.review_notes || [])
 const inferred = computed(() => (interpretationMeta.value?.inferred_fields || []).map(field => labels[field]).filter(Boolean))
 const interpretedText = ref('')
@@ -247,10 +245,9 @@ const saveDraft = async () => {
   savedMessage.value = ''
 
   try {
-    const result = await saveVoiceDraft(draft.value, saveTarget.value)
-    const channels = Object.keys(result.saved || {})
-    savedMessage.value = `Guardado correctamente en: ${channels.join(', ')}`
-    status.value = 'Gasto guardado en el destino seleccionado. Si usas Sheets, sincroniza el dashboard para verlo.'
+    await saveVoiceDraft(draft.value)
+    savedMessage.value = 'Movimiento guardado en el dashboard.'
+    status.value = savedMessage.value
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'No se pudo guardar el gasto.'
   } finally {
@@ -280,8 +277,11 @@ onUnmounted(() => {
       <section v-if="savedMessage" class="voice-success" role="status">
         <span class="voice-check">✓</span><h2>Listo, guardado</h2>
         <p>{{ draft.descripcion }}</p><strong>{{ money(draft.gasto || draft.abono) }}</strong>
-        <p v-if="saveTarget === 'sheets'" class="voice-muted">Sincroniza el dashboard para verlo allí.</p>
-        <button class="btn-primary" @click="savedMessage = ''; hasDraft = false; transcript = ''; interpretedText = ''; interpretationMeta = null; updateDraft({}); clearAudio()">Registrar otro</button>
+        <p class="voice-muted">Ya puedes consultarlo en tu dashboard.</p>
+        <div class="voice-success-actions">
+          <button class="btn-primary" @click="savedMessage = ''; hasDraft = false; transcript = ''; interpretedText = ''; interpretationMeta = null; updateDraft({}); clearAudio()">Registrar otro</button>
+          <button class="btn-secondary" @click="$emit('go-dashboard')">Ver dashboard</button>
+        </div>
       </section>
       <template v-else>
         <section class="voice-recorder" :class="{ recording: isRecording }" :aria-busy="busy">
@@ -316,17 +316,16 @@ onUnmounted(() => {
           <div v-if="reviewNotes.length" class="voice-warning" role="status"><p v-for="note in reviewNotes" :key="note">{{ note }}</p></div>
           <p v-if="stale" class="capture-error">Actualiza el formulario con el texto corregido antes de guardar.</p>
           <p v-if="!validDraft" class="voice-muted">Completa la descripción, categoría y monto.</p>
-          <button class="btn-primary voice-save" :disabled="busy || isRecording || !saveTarget || !validDraft || stale">{{ saving ? 'Guardando…' : 'Guardar movimiento' }}</button>
+          <button class="btn-primary voice-save" :disabled="busy || isRecording || !voiceConfig || !validDraft || stale">{{ saving ? 'Guardando…' : 'Guardar movimiento' }}</button>
         </form>
 
         <details class="voice-options">
-          <summary>{{ hasDraft ? 'Audio, texto y opciones' : 'O escribe / adjunta un audio' }}</summary>
+          <summary>{{ hasDraft ? 'Audio y texto' : 'O escribe / adjunta un audio' }}</summary>
           <div class="voice-options-body">
             <label class="capture-field">Adjuntar audio<input type="file" :disabled="busy || isRecording || !voiceConfig" accept="audio/*" @change="onAudioFileSelected" /><small v-if="voiceConfig">Hasta {{ voiceConfig.max_audio_bytes / 1000000 }} MB</small></label>
             <audio v-if="audioUrl" :src="audioUrl" controls class="capture-player" />
             <label class="capture-field">Texto<textarea v-model="transcript" :disabled="busy || isRecording" rows="3" placeholder="Gasté tres lucas en un café" /></label>
             <button class="btn-secondary" :disabled="busy || isRecording || !transcript.trim()" @click="interpretText">{{ hasDraft ? 'Actualizar formulario' : 'Completar con texto' }}</button>
-            <label class="capture-field">Guardar en<select v-model="saveTarget" :disabled="busy || isRecording"><option v-for="target in voiceConfig?.targets || []" :key="target.value" :value="target.value">{{ target.label }}</option></select></label>
             <p v-if="inferred.length" class="voice-muted">Sugeridos: {{ inferred.join(', ') }}.</p>
           </div>
         </details>
@@ -338,27 +337,28 @@ onUnmounted(() => {
 <style scoped>
 .voice-mobile { width: min(100% - 32px, 460px); margin: 0 auto; padding: 22px 0 max(28px, env(safe-area-inset-bottom)); }
 .voice-top { display:flex; gap:14px; align-items:center; margin-bottom:12px; }
-.voice-back { width:44px; height:44px; border:1px solid var(--border); border-radius:50%; background:var(--paper); font-size:22px; }
+.voice-back { width:44px; height:44px; border:1px solid var(--border); border-radius:50%; background:var(--paper); color:var(--ink); font-size:22px; }
 .voice-eyebrow { font-size:10px; letter-spacing:1.7px; color:var(--muted); }
 .voice-top h1 { font-size:24px; margin:3px 0 0; }
-.voice-recorder { display:flex; align-items:center; gap:18px; padding:24px 4px; }
+.voice-recorder { display:flex; align-items:center; gap:18px; padding:22px; margin:14px 0; border:1px solid var(--border); border-radius:16px; background:var(--paper); box-shadow:var(--shadow); }
+.voice-recorder.recording { border-color:var(--chart-antojo); background:var(--expense-surface); }
 .voice-recorder h2 { font-size:18px; margin:0 0 6px; }
 .voice-recorder p,.voice-muted { font-size:13px; color:var(--muted); line-height:1.5; }
-.voice-mic { flex-shrink:0; width:76px; height:76px; border:0; border-radius:50%; background:#174c46; color:white; display:grid; place-items:center; box-shadow:0 5px 20px #174c4625; }
+.voice-mic { flex-shrink:0; width:76px; height:76px; border:0; border-radius:50%; background:var(--navy); color:white; display:grid; place-items:center; box-shadow:0 5px 16px #172b4530; }
 .voice-mic:disabled { opacity:.6; }
-.recording .voice-mic { background:#ac3e35; box-shadow:0 0 0 7px #ac3e3515; }
+.recording .voice-mic { background:var(--chart-antojo); box-shadow:0 0 0 6px var(--recording-ring); }
 .voice-stop { width:23px; height:23px; border-radius:5px; background:white; }
 .voice-spinner { width:25px; height:25px; border:3px solid #ffffff55; border-top-color:white; border-radius:50%; animation:spin 1s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
 @media(prefers-reduced-motion:reduce) { .voice-spinner { animation:none; } }
-.voice-summary { border:1px solid var(--border); background:var(--paper); border-radius:22px; padding:20px; box-shadow:0 8px 26px #1f2a3706; }
+.voice-summary { border:1px solid var(--border); background:var(--paper); border-radius:12px; padding:20px; box-shadow:none; }
 .voice-section-title { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
 .voice-section-title h2 { font-size:15px; }
 .voice-section-title span { font-size:11px; color:var(--muted); }
 fieldset { padding:0; border:0; margin:0; min-width:0; }
 label { display:grid; gap:6px; font-size:12px; color:var(--muted); min-width:0; }
-input,select,textarea { width:100%; min-width:0; box-sizing:border-box; font:inherit; font-size:16px; color:var(--ink); background:#f6f4ed; border:1px solid transparent; border-radius:10px; padding:11px; }
-input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,summary:focus-visible { outline:2px solid #287d70; outline-offset:3px; }
+input,select,textarea { width:100%; min-width:0; box-sizing:border-box; font:inherit; font-size:16px; color:var(--ink); background:var(--surface-raised); border:1px solid var(--border); border-radius:8px; padding:11px; }
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,summary:focus-visible { outline:2px solid var(--focus); outline-offset:3px; }
 textarea { resize:vertical; line-height:1.4; }
 .voice-description textarea { font-size:18px; background:transparent; padding:4px 0; border-radius:0; }
 .voice-amount-row { display:flex; gap:12px; align-items:center; border-top:1px solid var(--border); border-bottom:1px solid var(--border); margin:12px 0 16px; padding:12px 0; }
@@ -367,16 +367,18 @@ textarea { resize:vertical; line-height:1.4; }
 .voice-amount-row input { background:transparent; padding:5px; font-size:27px; font-weight:600; }
 .voice-small-fields { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .voice-category { grid-column:1/-1; }
-.voice-save { width:100%; min-height:50px; margin-top:18px; border-radius:12px; background:#174c46; color:white; }
-.voice-warning { background:#fff0ce; border-radius:10px; padding:10px 12px; margin-top:12px; font-size:13px; line-height:1.5; }
+.voice-save { width:100%; min-height:50px; margin-top:18px; border-radius:10px; background:var(--navy); color:white; }
+.voice-warning { background:var(--warning); border:1px solid var(--warning-border); border-radius:10px; padding:10px 12px; margin-top:12px; font-size:13px; line-height:1.5; }
 .voice-warning p+p { margin-top:5px; }
-.voice-options { margin-top:18px; font-size:13px; color:var(--muted); }
-.voice-options summary { cursor:pointer; padding:12px 0; min-height:44px; }
-.voice-options-body { display:grid; gap:14px; padding:12px 0; }
-.voice-link { border:0; background:transparent; text-decoration:underline; min-height:44px; color:#174c46; }
-.voice-success { display:grid; gap:14px; text-align:center; justify-items:center; padding:36px 20px; }
-.voice-check { display:grid; place-items:center; width:64px; height:64px; border-radius:50%; background:#dcefe3; color:#174c46; font-size:30px; }
+.voice-options { margin-top:18px; padding:0 16px; border:1px solid var(--border); border-radius:14px; background:var(--paper); font-size:13px; color:var(--muted); }
+.voice-options summary { cursor:pointer; padding:15px 0; min-height:44px; font-weight:700; color:var(--ink); }
+.voice-options-body { display:grid; gap:14px; padding:6px 0 18px; }
+.voice-link { border:0; background:transparent; text-decoration:underline; min-height:44px; color:var(--chart-necesidad); }
+.voice-success { display:grid; gap:14px; text-align:center; justify-items:center; padding:36px 20px; margin-top:16px; border:1px solid var(--border); border-radius:12px; background:var(--paper); box-shadow:none; }
+.voice-success-actions { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; }
+.voice-check { display:grid; place-items:center; width:64px; height:64px; border-radius:50%; background:var(--success-soft); color:var(--success); font-size:30px; }
 .voice-success h2 { font-size:23px; }.voice-success strong { font-size:30px; }
 .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
 button { cursor:pointer; }button:disabled { cursor:default; }
+@media (max-width:390px) { .voice-recorder { padding:16px; gap:12px; } .voice-mic { width:66px; height:66px; } }
 </style>

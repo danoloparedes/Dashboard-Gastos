@@ -24,6 +24,22 @@ export async function query(text, values) {
   return getPool().query(text, values)
 }
 
+export async function withTransaction(action) {
+  await ensureSchema()
+  const client = await getPool().connect()
+  try {
+    await client.query('BEGIN')
+    const result = await action((text, values) => client.query(text, values))
+    await client.query('COMMIT')
+    return result
+  } catch (error) {
+    try { await client.query('ROLLBACK') } catch (rollbackError) { console.error('Rollback failed', rollbackError) }
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
 export async function ensureSchema() {
   await query(`
     CREATE TABLE IF NOT EXISTS transactions (
@@ -41,73 +57,101 @@ export async function ensureSchema() {
     CREATE INDEX IF NOT EXISTS idx_transactions_fecha ON transactions(fecha);
     CREATE INDEX IF NOT EXISTS idx_transactions_tipo ON transactions(tipo);
     CREATE INDEX IF NOT EXISTS idx_transactions_clasificacion ON transactions(clasificacion);
+    CREATE TABLE IF NOT EXISTS sheet_protections (external_id TEXT PRIMARY KEY);
   `)
 }
 
 export async function listTransactions() {
   await ensureSchema()
   const result = await query(`
-    SELECT fecha::text AS fecha, descripcion, clasificacion, tipo, abono, gasto
+    SELECT id, fecha::text AS fecha, descripcion, clasificacion, tipo, abono, gasto
     FROM transactions
     ORDER BY fecha ASC, id ASC
   `)
 
   return result.rows.map((row) => ({
     ...row,
+    id: Number(row.id),
     abono: Number(row.abono),
     gasto: Number(row.gasto)
   }))
 }
 
-export async function upsertTransactions(rows) {
-  await ensureSchema()
+export async function upsertTransactions(rows, run = query) {
+  if (run === query) await ensureSchema()
+  if (!rows.length) return
 
-  for (const row of rows) {
-    await query(
-      `
-        INSERT INTO transactions (
-          external_id, fecha, descripcion, clasificacion, tipo, abono, gasto
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-        ON CONFLICT (external_id) DO UPDATE SET
-          fecha = EXCLUDED.fecha,
-          descripcion = EXCLUDED.descripcion,
-          clasificacion = EXCLUDED.clasificacion,
-          tipo = EXCLUDED.tipo,
-          abono = EXCLUDED.abono,
-          gasto = EXCLUDED.gasto,
-          updated_at = CURRENT_TIMESTAMP
-      `,
-      [
-        row.externalId,
-        row.fecha,
-        row.descripcion,
-        row.clasificacion,
-        row.tipo,
-        row.abono,
-        row.gasto
-      ]
+  await run(`INSERT INTO transactions (external_id, fecha, descripcion, clasificacion, tipo, abono, gasto)
+    SELECT r.external_id, r.fecha, r.descripcion, r.clasificacion, r.tipo, r.abono, r.gasto
+    FROM jsonb_to_recordset($1::jsonb) AS r(
+      external_id text, fecha date, descripcion text, clasificacion text, tipo text, abono bigint, gasto bigint
     )
-  }
+    WHERE NOT EXISTS (SELECT 1 FROM sheet_protections WHERE external_id = r.external_id)
+    ON CONFLICT (external_id) DO UPDATE SET
+      fecha = EXCLUDED.fecha,
+      descripcion = EXCLUDED.descripcion,
+      clasificacion = EXCLUDED.clasificacion,
+      tipo = EXCLUDED.tipo,
+      abono = EXCLUDED.abono,
+      gasto = EXCLUDED.gasto,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE NOT EXISTS (SELECT 1 FROM sheet_protections WHERE external_id = EXCLUDED.external_id)`,
+  [JSON.stringify(rows.map(row => ({
+    external_id: row.externalId,
+    fecha: row.fecha,
+    descripcion: row.descripcion,
+    clasificacion: row.clasificacion,
+    tipo: row.tipo,
+    abono: row.abono,
+    gasto: row.gasto
+  })))])
 }
 
-export async function deleteMissingSheetTransactions(worksheetName, externalIds) {
-  await ensureSchema()
+export async function deleteMissingSheetTransactions(worksheetName, externalIds, run = query) {
+  if (run === query) await ensureSchema()
   const prefix = `${worksheetName}:%`
 
   if (externalIds.length === 0) {
-    return query('DELETE FROM transactions WHERE external_id LIKE $1', [prefix])
+    return run('DELETE FROM transactions WHERE external_id LIKE $1 AND NOT EXISTS (SELECT 1 FROM sheet_protections WHERE sheet_protections.external_id = transactions.external_id)', [prefix])
   }
 
-  return query(
+  return run(
     `DELETE FROM transactions
      WHERE external_id LIKE $1
-       AND NOT (external_id = ANY($2::text[]))`,
+        AND NOT (external_id = ANY($2::text[]))
+        AND NOT EXISTS (SELECT 1 FROM sheet_protections WHERE sheet_protections.external_id = transactions.external_id)`,
     [prefix, externalIds]
   )
 }
 
-export async function countTransactions() {
-  await ensureSchema()
-  const result = await query('SELECT COUNT(*)::int AS total FROM transactions')
+export async function countTransactions(run = query) {
+  if (run === query) await ensureSchema()
+  const result = await run('SELECT COUNT(*)::int AS total FROM transactions')
   return result.rows[0].total
+}
+
+export async function createTransaction(row) {
+  await ensureSchema()
+  const result = await query(`INSERT INTO transactions (external_id, fecha, descripcion, clasificacion, tipo, abono, gasto)
+    VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+    [row.externalId, row.fecha, row.descripcion, row.clasificacion, row.tipo, row.abono, row.gasto])
+  return Number(result.rows[0].id)
+}
+
+export async function updateTransaction(id, row) {
+  await ensureSchema()
+  const result = await query(`WITH changed AS (
+    UPDATE transactions SET fecha=$2, descripcion=$3, clasificacion=$4, tipo=$5, abono=$6, gasto=$7, updated_at=CURRENT_TIMESTAMP
+    WHERE id=$1 RETURNING external_id
+  ), protected AS (INSERT INTO sheet_protections (external_id) SELECT external_id FROM changed WHERE true ON CONFLICT DO NOTHING RETURNING external_id)
+    SELECT external_id FROM changed`, [id, row.fecha, row.descripcion, row.clasificacion, row.tipo, row.abono, row.gasto])
+  return result.rows.length > 0
+}
+
+export async function deleteTransaction(id) {
+  await ensureSchema()
+  const result = await query(`WITH removed AS (DELETE FROM transactions WHERE id=$1 RETURNING external_id),
+    protected AS (INSERT INTO sheet_protections (external_id) SELECT external_id FROM removed WHERE true ON CONFLICT DO NOTHING RETURNING external_id)
+    SELECT external_id FROM removed`, [id])
+  return result.rows.length > 0
 }

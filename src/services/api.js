@@ -87,6 +87,17 @@ export async function transcribeVoiceAudio(audioBlob) {
   return payload.result || {}
 }
 
+export async function mutateTransaction(method, transaction) {
+  const response = await fetchWithTimeout(dataApiUrl('/transaction'), {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(transaction)
+  })
+  const payload = await safeJson(response)
+  if (!response.ok) throw new Error(payload?.error || `Error guardando movimiento (${response.status})`)
+  return payload
+}
+
 export async function fetchVoiceConfig() {
   const response = await fetchWithTimeout(voiceApiUrl('/config'))
   if (!response.ok) throw new Error('No se pudo cargar la configuracion de voz. Recarga la pagina.')
@@ -137,7 +148,7 @@ export async function interpretVoiceTranscript(transcript) {
   return payload.result || {}
 }
 
-export async function saveVoiceDraft(draft, persistTarget) {
+export async function saveVoiceDraft(draft) {
   const response = await fetchWithTimeout(
     voiceApiUrl('/save'),
     {
@@ -145,10 +156,7 @@ export async function saveVoiceDraft(draft, persistTarget) {
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        draft,
-        persist_target: persistTarget
-      })
+      body: JSON.stringify({ draft })
     },
     SYNC_TIMEOUT_MS
   )

@@ -6,11 +6,10 @@ import sqlite3
 import time
 import unicodedata
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from pathlib import Path
 
-import gspread
 from dotenv import load_dotenv
 
 from openai import OpenAI, APIConnectionError, APIStatusError, APITimeoutError
@@ -20,6 +19,10 @@ BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / '.env')
 REFERENCE = json.loads((BASE_DIR.parent / 'shared' / 'expense-reference.json').read_text(encoding='utf-8'))
 INSTRUCTIONS = (BASE_DIR.parent / 'shared' / 'expense-instructions.txt').read_text(encoding='utf-8')
+
+
+class InvalidSaveTarget(RuntimeError):
+  status = 400
 
 
 def _model(variable: str, default: str) -> str:
@@ -54,20 +57,6 @@ def _resolve_db_path() -> str:
   if not db_path.is_absolute():
     db_path = (BASE_DIR / db_path).resolve()
   return str(db_path)
-
-
-def _resolve_credentials_path() -> Path:
-  configured = os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE', './service-account.json').strip()
-  credentials_path = Path(configured)
-  if not credentials_path.is_absolute():
-    credentials_path = (BASE_DIR / credentials_path).resolve()
-
-  if not credentials_path.exists():
-    alt_path = (BASE_DIR / 'sync' / 'service-account.json').resolve()
-    if alt_path.exists():
-      credentials_path = alt_path
-
-  return credentials_path
 
 
 def _normalize_text(value: str) -> str:
@@ -231,7 +220,8 @@ def normalize_draft(draft: dict) -> dict:
 
 def save_to_sqlite(draft: dict) -> dict:
   db_path = _resolve_db_path()
-  external_id = f"voice:{datetime.utcnow().strftime('%Y%m%d%H%M%S')}:{uuid.uuid4().hex[:8]}"
+  external_id = f"voice:{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}:{uuid.uuid4().hex[:8]}"
+  Path(db_path).parent.mkdir(parents=True, exist_ok=True)
   conn = sqlite3.connect(db_path)
   try:
     schema_path = (BASE_DIR / 'sync' / 'schema.sql').resolve()
@@ -260,33 +250,6 @@ def save_to_sqlite(draft: dict) -> dict:
     conn.close()
 
   return {'external_id': external_id, 'db_path': db_path}
-
-
-def save_to_google_sheets(draft: dict) -> dict:
-  spreadsheet_id = os.getenv('GOOGLE_SHEETS_SPREADSHEET_ID', '').strip()
-  worksheet_name = os.getenv('GOOGLE_SHEETS_WORKSHEET', 'Gastos').strip() or 'Gastos'
-  credentials = _resolve_credentials_path()
-
-  if not spreadsheet_id:
-    raise RuntimeError('Falta GOOGLE_SHEETS_SPREADSHEET_ID en backend/.env')
-  if not credentials.exists():
-    raise RuntimeError(f'No existe archivo de credenciales: {credentials}')
-
-  client = gspread.service_account(filename=str(credentials))
-  worksheet = client.open_by_key(spreadsheet_id).worksheet(worksheet_name)
-  worksheet.append_row(
-    [
-      draft['fecha'],
-      draft['descripcion'],
-      draft['clasificacion'],
-      draft['tipo'],
-      int(draft['abono']),
-      int(draft['gasto']),
-    ],
-    value_input_option='USER_ENTERED',
-  )
-
-  return {'worksheet': worksheet_name, 'spreadsheet_id': spreadsheet_id}
 
 
 def process_audio_to_draft(audio_bytes: bytes, filename: str, text_override: str = '') -> dict:
@@ -339,8 +302,9 @@ def interpret_text_to_draft(transcript: str) -> dict:
   }
 
 
-def save_draft(draft: dict, persist_target: str) -> dict:
-  target = (persist_target or 'sqlite').strip().lower()
+def save_draft(draft: dict, persist_target: str = 'sqlite') -> dict:
+  if persist_target != 'sqlite':
+    raise InvalidSaveTarget('El registro ahora se guarda solo en el dashboard. Recarga la pagina e intenta de nuevo.')
   normalized = normalize_draft(draft)
   if not normalized['descripcion']:
     raise RuntimeError('Completa la descripcion antes de guardar.')
@@ -348,15 +312,4 @@ def save_draft(draft: dict, persist_target: str) -> dict:
     raise RuntimeError('Un movimiento debe ser ingreso o gasto, no ambos.')
   if normalized['abono'] == 0 and normalized['gasto'] == 0:
     raise RuntimeError('Indica un monto mayor a cero antes de guardar.')
-  results: dict[str, dict] = {}
-
-  if target in {'sqlite', 'both'}:
-    results['sqlite'] = save_to_sqlite(normalized)
-
-  if target in {'sheets', 'both'}:
-    results['sheets'] = save_to_google_sheets(normalized)
-
-  if not results:
-    raise RuntimeError(f'persist_target no soportado: {persist_target}')
-
-  return {'draft': normalized, 'saved': results}
+  return {'draft': normalized, 'saved': {'sqlite': save_to_sqlite(normalized)}}

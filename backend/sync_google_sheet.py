@@ -89,57 +89,50 @@ def load_rows(spreadsheet_id: str, worksheet_name: str, credentials_file: str) -
 def run_sync(db_path: str, schema_path: str, spreadsheet_id: str, worksheet_name: str, credentials_file: str) -> dict:
     records = load_rows(spreadsheet_id, worksheet_name, credentials_file)
 
+    required = {"fecha", "descripcion", "clasificacion", "tipo", "abono", "gasto"}
+    if records and any(not required.issubset(normalize_headers(record)) for record in records):
+        raise ValueError("La hoja debe tener fecha, descripcion, clasificacion, tipo, abono y gasto.")
+
     conn = get_connection(db_path)
-    init_schema(conn, schema_path)
+    try:
+        init_schema(conn, schema_path)
+        imported = 0
+        skipped = 0
+        current_external_ids: set[str] = set()
 
-    imported = 0
-    skipped = 0
-    current_external_ids: set[str] = set()
+        with conn:
+            for index, record in enumerate(records, start=2):
+                row = normalize_headers(record)
+                external_id = f"{worksheet_name}:{index}"
+                current_external_ids.add(external_id)
 
-    for index, record in enumerate(records, start=2):
-        row = normalize_headers(record)
+                try:
+                    fecha = parse_date(row["fecha"])
+                except ValueError:
+                    skipped += 1
+                    continue
 
-        required = ["fecha", "descripcion", "clasificacion", "tipo", "abono", "gasto"]
-        if any(key not in row for key in required):
-            skipped += 1
-            continue
+                upsert_transaction(
+                    conn,
+                    external_id=external_id,
+                    fecha=fecha,
+                    descripcion=row["descripcion"].strip() or "Sin descripcion",
+                    clasificacion=row["clasificacion"].strip(),
+                    tipo=row["tipo"].strip(),
+                    abono=parse_money(row["abono"]),
+                    gasto=parse_money(row["gasto"]),
+                )
+                imported += 1
 
-        try:
-            fecha = parse_date(row["fecha"])
-        except ValueError:
-            skipped += 1
-            continue
+            deleted = delete_missing_transactions(
+                conn,
+                worksheet_name=worksheet_name,
+                current_external_ids=current_external_ids,
+            )
 
-        descripcion = row["descripcion"].strip() or "Sin descripcion"
-        clasificacion = row["clasificacion"].strip()
-        tipo = row["tipo"].strip()
-        abono = parse_money(row["abono"])
-        gasto = parse_money(row["gasto"])
-
-        external_id = f"{worksheet_name}:{index}"
-        current_external_ids.add(external_id)
-
-        upsert_transaction(
-            conn,
-            external_id=external_id,
-            fecha=fecha,
-            descripcion=descripcion,
-            clasificacion=clasificacion,
-            tipo=tipo,
-            abono=abono,
-            gasto=gasto,
-        )
-        imported += 1
-
-    deleted = delete_missing_transactions(
-        conn,
-        worksheet_name=worksheet_name,
-        current_external_ids=current_external_ids,
-    )
-
-    conn.commit()
-    total = count_transactions(conn)
-    conn.close()
+        total = count_transactions(conn)
+    finally:
+        conn.close()
 
     print(f"Filas procesadas: {len(records)}")
     print(f"Filas importadas/actualizadas: {imported}")

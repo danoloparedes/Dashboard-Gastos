@@ -35,7 +35,8 @@ def upsert_transaction(
         """
         INSERT INTO transactions (
             external_id, fecha, descripcion, clasificacion, tipo, abono, gasto
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ) SELECT ?, ?, ?, ?, ?, ?, ?
+          WHERE NOT EXISTS (SELECT 1 FROM sheet_protections WHERE external_id = ?)
         ON CONFLICT(external_id) DO UPDATE SET
             fecha = excluded.fecha,
             descripcion = excluded.descripcion,
@@ -44,8 +45,9 @@ def upsert_transaction(
             abono = excluded.abono,
             gasto = excluded.gasto,
             updated_at = CURRENT_TIMESTAMP
+        WHERE NOT EXISTS (SELECT 1 FROM sheet_protections WHERE external_id = excluded.external_id)
         """,
-        (external_id, fecha, descripcion, clasificacion, tipo, abono, gasto),
+        (external_id, fecha, descripcion, clasificacion, tipo, abono, gasto, external_id),
     )
 
 
@@ -59,7 +61,7 @@ def delete_missing_transactions(
 
     if not current_external_ids:
         cursor = conn.execute(
-            "DELETE FROM transactions WHERE external_id LIKE ?",
+            "DELETE FROM transactions WHERE external_id LIKE ? AND NOT EXISTS (SELECT 1 FROM sheet_protections WHERE sheet_protections.external_id = transactions.external_id)",
             (prefix,),
         )
         return int(cursor.rowcount or 0)
@@ -72,6 +74,7 @@ def delete_missing_transactions(
         DELETE FROM transactions
         WHERE external_id LIKE ?
           AND external_id NOT IN ({placeholders})
+          AND NOT EXISTS (SELECT 1 FROM sheet_protections WHERE sheet_protections.external_id = transactions.external_id)
         """,
         params,
     )

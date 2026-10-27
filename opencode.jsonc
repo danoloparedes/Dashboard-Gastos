@@ -1,0 +1,10 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // Permite editar el proyecto y ejecutar comandos sin mostrar "Allow once".
+  "permissions": [
+    { "action": "edit", "resource": "*", "effect": "allow" },
+    { "action": "shell", "resource": "*", "effect": "allow" },
+    // Fuera del proyecto, mantener la solicitud de autorizacion.
+    { "action": "external_directory", "resource": "*", "effect": "ask" }
+  ]
+}

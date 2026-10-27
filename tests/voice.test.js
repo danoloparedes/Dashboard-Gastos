@@ -31,7 +31,7 @@ test('voice endpoints work without an external voice URL', async t => {
   t.mock.method(globalThis, 'fetch', async () => { throw new Error('Unexpected network') })
   assert.equal((await config.fetch(new Request('http://localhost'))).status, 200)
   const settings = await (await config.fetch(new Request('http://localhost'))).json()
-  assert.equal(settings.result.default_target, 'postgres')
+  assert.deepEqual(Object.keys(settings.result), ['max_audio_bytes'])
   for (const handler of [transcribe, interpret, processVoice, save]) {
     const result = await handler.fetch(new Request('http://localhost'))
     assert.equal(result.status, 405)
@@ -110,31 +110,27 @@ test('provider errors and incomplete/refused/invalid outputs are safe', async t 
   assert.equal((await interpret.fetch(json({ transcript: 'cafe' }))).status, 422)
 })
 
-test('saving uses PostgreSQL by default and sheet row IDs avoid sync duplicates', async () => {
+test('saving uses PostgreSQL only and rejects legacy Sheets destinations', async () => {
   const rows = []
-  let sheetWrites = 0
   const dependencies = {
-    upsertTransactions: async batch => rows.push(...batch),
-    appendVoiceToSheet: async () => { sheetWrites++; return { external_id: 'Gastos:42' } }
+    upsertTransactions: async batch => rows.push(...batch)
   }
   const result = await saveDraft({ draft }, dependencies)
   assert.ok(result.saved.postgres.external_id.startsWith('voice:'))
-  assert.equal(sheetWrites, 0)
-  await saveDraft({ draft, persist_target: 'both' }, dependencies)
-  assert.equal(rows[1].externalId, 'Gastos:42')
-  assert.equal(sheetWrites, 1)
-  await saveDraft({ draft, persist_target: 'sheets' }, dependencies)
+  assert.deepEqual(Object.keys(result.saved), ['postgres'])
+  await saveDraft({ draft, persist_target: 'postgres' }, dependencies)
+  for (const target of ['both', 'sheets', 'sqlite']) {
+    await assert.rejects(saveDraft({ draft, persist_target: target }, dependencies), /solo en el dashboard/)
+  }
   assert.equal(rows.length, 2)
-  await assert.rejects(saveDraft({ draft, persist_target: 'sqlite' }, dependencies), /Destino/)
   await assert.rejects(saveDraft({ draft: { ...draft, gasto: 0 } }, dependencies), /monto/)
   assert.equal(validateDraft({ ...draft, gasto: 0 }).gasto, 0)
 })
 
-test('partial save explicitly reports that Sheets succeeded', async () => {
-  await assert.rejects(saveDraft({ draft, persist_target: 'both' }, {
-    appendVoiceToSheet: async () => ({ external_id: 'Gastos:42' }),
-    upsertTransactions: async () => { throw new Error('db secret') }
-  }), /No repitas el guardado/)
+test('failed SQL save does not claim it was saved elsewhere', async () => {
+  await assert.rejects(saveDraft({ draft }, {
+    upsertTransactions: async () => { throw new Error('db unavailable') }
+  }), /db unavailable/)
 })
 
 test('interpretation exposes inferred fields and preserves detailed descriptions', async t => {

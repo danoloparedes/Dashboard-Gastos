@@ -10,7 +10,7 @@ Proyecto Vue para visualizar tus gastos personales, con tres vistas:
 
 El dashboard, la API de datos y los endpoints de voz se despliegan juntos en
 Vercel. Las funciones de `api/voice/` llaman a OpenAI desde el servidor y guardan
-en PostgreSQL o Google Sheets. No necesitas publicar un servidor Python aparte.
+solo en PostgreSQL. No necesitas publicar un servidor Python aparte.
 
 1. Crea una base PostgreSQL desde una integracion del Marketplace de Vercel (por
 	ejemplo, Neon) y conectala a este proyecto. Vercel debe exponer la cadena de
@@ -37,8 +37,10 @@ ASSISTANT_DAILY_OPENAI_LIMIT=100
 ```
 
 `GOOGLE_SERVICE_ACCOUNT_JSON` debe contener el JSON completo de la cuenta de
-servicio en una sola variable secreta. Comparte la hoja con el correo de esa
-cuenta, con permiso de lectura para sincronizar o de editor para guardar por voz.
+servicio en una sola variable secreta. Solo hace falta si quieres importar la
+hoja historica: compartele acceso de lectura al correo de esa cuenta.
+Las tres variables `GOOGLE_*` son opcionales si no vas a sincronizar Sheets;
+el registro por voz solo necesita SQL y OpenAI.
 Nunca subas `backend/service-account.json` ni
 `backend/.env` a Vercel.
 
@@ -49,16 +51,29 @@ Nunca subas `backend/service-account.json` ni
 El frontend usa `/api` y `/api/voice` del mismo dominio de Vercel. No necesitas
 `VITE_DATA_API_URL` ni `VITE_VOICE_API_URL`. Elimina `VITE_VOICE_API_URL` si la
 agregaste anteriormente y vuelve a desplegar los cambios del repositorio.
+
+### Movimientos manuales en el dashboard
+
+En **Desglose de movimientos del mes** puedes agregar, editar (fecha, descripcion,
+clasificacion, tipo y montos) o eliminar filas. Ingresa la contraseña del asistente
+para guardar; la lectura sigue siendo publica. Solo puede haber un abono o un gasto
+positivo por movimiento. Los cambios se guardan directamente en PostgreSQL (Vercel)
+o SQLite (local/Raspberry), sin modificar Google Sheets. Editar o eliminar una fila
+importada la protege de futuras sincronizaciones de la hoja; los nuevos movimientos
+se guardan solo en SQL. `POST`, `PUT` y `DELETE /api/transaction` son privados;
+`GET /api/transactions` devuelve el identificador `id` de cada fila.
+No insertes, elimines ni reordenes filas en Sheets despues de editar movimientos
+importados desde el dashboard: los identificadores actuales de la hoja usan numeros
+de fila, no IDs estables. Reordenarlas puede aplicar una proteccion a otra fila.
 Las claves de OpenAI son variables del servidor: nunca deben llevar prefijo `VITE_`.
-En `/#/capture`, el destino predeterminado es Dashboard (PostgreSQL). Los gastos
-guardados alli aparecen al abrir el dashboard sin sincronizar Google Sheets.
+En `/#/capture` los movimientos se guardan unicamente en SQL (PostgreSQL en
+Vercel o SQLite en local/Raspberry). Aparecen en el dashboard sin sincronizar Sheets.
 En desarrollo local, Vite conserva los proxies a `api_server.py` (puerto 8000) y
 `voice_server.py` (puerto 8001).
 
 Endpoints incluidos: `GET /api/voice/config`, `POST /api/voice/transcribe`,
 `POST /api/voice/interpret`, `POST /api/voice/process`, `POST /api/voice/save`.
-La configuracion publica de voz informa los destinos de guardado y el limite de audio,
-sin exponer credenciales. El frontend adapta las opciones para Vercel o Python local.
+La configuracion publica de voz informa el limite de audio sin exponer credenciales.
 
 En Vercel los audios admiten hasta 4 MB, dejando margen para multipart dentro del
 [limite de carga de las funciones](https://vercel.com/docs/functions/limitations).
@@ -181,6 +196,25 @@ npm run build
 
 ## Estructura relevante
 
+### Skills de OpenCode (solo desarrollo)
+
+Este repositorio incluye skills locales en `.opencode/skills/`: `@ui-ux-pro-max`
+para diseño/UX en Vue, `@ponytail` para cambios mínimos, y
+`@ponytail-review` / `@ponytail-audit` para revisiones de código. OpenCode los
+descubre automáticamente; no son dependencias de la aplicación ni cambian la
+interfaz por sí solos. Las búsquedas de UI UX Pro Max funcionan sin conexión
+con Python 3; por ejemplo, desde la raíz del proyecto en Windows:
+
+```powershell
+.\.venv\Scripts\python.exe .opencode\skills\ui-ux-pro-max\scripts\search.py "personal finance tracker dashboard" --design-system -p "Dashboard Gastos"
+```
+
+Fuentes MIT: [UI UX Pro Max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)
+(`d14efff8ed1faa4187f004f79926f428c8074ec7`) y
+[Ponytail](https://github.com/DietrichGebert/ponytail)
+(`09c434ab73ca43761c5d8b0c5d341926c2fba710`). Se copiaron como skills
+locales, sin ejecutar instaladores ni instalar plugins globales.
+
 - `src/pages/LandingPage.vue`: portada del sitio
 - `src/pages/DashboardPage.vue`: dashboard principal con filtros (consume API SQL)
 - `src/components/charts/StackedMonthlyChart.vue`: barras apiladas por mes
@@ -190,7 +224,7 @@ npm run build
 - `backend/api_server.py`: API local que lee SQLite
 - `src/pages/VoiceCapturePage.vue`: captura y confirmacion de gastos por voz
 - `backend/voice_server.py`: API de voz (proceso paralelo en puerto 8001)
-- `backend/voice_pipeline.py`: transcripcion, interpretacion y guardado (SQLite/Sheets)
+- `backend/voice_pipeline.py`: transcripcion, interpretacion y guardado en SQLite
 
 ## Backend y despliegue en Raspberry Pi
 
@@ -243,8 +277,8 @@ Notas:
 
 ### Autocompletado basado en tu historial
 
-El asistente usa los patrones de 155 movimientos del archivo
-`gastos dashboard historico.xlsx`. La referencia resumida esta en
+El asistente usa una seleccion de patrones del historial compartido (julio-octubre
+2026). La referencia resumida esta en
 `shared/expense-reference.json`: contiene descripciones, clasificaciones, tipos y
 frecuencias; no incluye fechas ni montos historicos. No importa esas filas a la base.
 `shared/expense-instructions.txt` contiene las reglas compartidas entre Vercel y Python.
@@ -256,14 +290,17 @@ Ambos archivos se incluyen en el despliegue y el contexto se envia a OpenAI al i
 - Revisa descripcion, monto, fecha, tipo y categoria en una tarjeta compacta, y
   pulsa **Guardar movimiento**. El selector Gasto/Ingreso determina la columna
   correspondiente y mantiene la otra en cero.
-- En **Audio, texto y opciones** puedes escuchar el audio, corregir la transcripcion,
-  escribir directamente, adjuntar un archivo o cambiar el destino de guardado.
+- En **Audio y texto** puedes escuchar el audio, corregir la transcripcion,
+  escribir directamente o adjuntar un archivo.
 - Conserva detalles utiles en la descripcion: concepto, comercio, persona, producto,
   medida o periodo que realmente mencionaste. No agrega comercios o personas solo
   porque aparecen en ejemplos anteriores.
 - Usa el contexto y las preferencias historicas para sugerir clasificacion y tipo.
   Los datos explicitos prevalecen sobre el historial; las inconsistencias se indican
   como dudas, no como reglas absolutas.
+- Incorpora **Hogar** como opcion para arriendo pagado, servicios y limpieza de la
+  vivienda al vivir solo. No reclasifica compras previas ni confunde el abono
+  historico de "Arriendo Dpto" con el pago de un arriendo.
 - Los campos inferidos y avisos aparecen antes del formulario, que permanece editable.
   No inventa montos ausentes; una descripcion vacia o ambos montos cero impiden guardar.
 - Las fechas relativas se interpretan en America/Santiago. En Windows, instala
@@ -284,6 +321,8 @@ Ejemplos para verificar antes de usarlo habitualmente:
 | Me abonaron el sueldo de Ausenco por un millon | Sueldo Ausenco; Sueldo; abono 1000000; tipo inferido para revisar |
 | Compre una barra de proteina | Aviso de ambiguedad historica y monto pendiente |
 | Gaste 3000 en cafe, clasificalo como Necesidad | Respetar Necesidad explicitamente indicado |
+| Pague 12000 de luz del departamento | Hogar; Necesidad; gasto 12000 |
+| Me depositaron el arriendo del departamento | Abono; no confundir con un arriendo pagado; pedir monto si falta |
 
 La app ahora incluye una vista movil para capturar gastos por voz:
 
@@ -339,10 +378,9 @@ hasta 4 MB en Vercel y 24 MB en la interfaz local. Los errores de clave, cuota y
 respuestas internas del proveedor. Un monto ausente queda en cero y debe
 completarse antes de guardar; nunca se genera un gasto ficticio.
 
-En Vercel el guardado usa PostgreSQL, Google Sheets o ambos; en local usa SQLite,
-Google Sheets o ambos. Si solo guardas en Sheets, ejecuta **Actualizar datos**.
-Al guardar en ambos desde Vercel, se reutiliza el identificador de fila de Sheets
-para evitar duplicados durante la siguiente sincronizacion.
+El guardado por voz va solo a PostgreSQL (Vercel) o SQLite (local/Raspberry).
+`POST /api/voice/save` rechaza solicitudes antiguas que indiquen `sheets` o `both`;
+Google Sheets sigue disponible solo como origen opcional de sincronizacion.
 
 Referencias: [transcripcion](https://developers.openai.com/api/docs/guides/speech-to-text)
 y [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs).

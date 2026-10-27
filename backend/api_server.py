@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import uuid
+from datetime import date
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from assistant_auth import require_session, AccessError
 from pathlib import Path
@@ -10,6 +12,7 @@ from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from sync_google_sheet import run_sync
+from sync.db import get_connection, init_schema
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / '.env')
@@ -61,7 +64,7 @@ def query_transactions() -> list[dict]:
 
   rows = conn.execute(
     """
-    SELECT fecha, descripcion, clasificacion, tipo, abono, gasto
+    SELECT id, fecha, descripcion, clasificacion, tipo, abono, gasto
     FROM transactions
     ORDER BY fecha ASC, id ASC
     """
@@ -70,6 +73,7 @@ def query_transactions() -> list[dict]:
 
   return [
     {
+      'id': row['id'],
       'fecha': row['fecha'],
       'descripcion': row['descripcion'] or '',
       'clasificacion': row['clasificacion'] or '',
@@ -79,6 +83,57 @@ def query_transactions() -> list[dict]:
     }
     for row in rows
   ]
+
+
+def validate_transaction(body):
+  if not isinstance(body, dict):
+    raise ValueError('Movimiento invalido.')
+  fecha = body.get('fecha')
+  try:
+    if not isinstance(fecha, str) or date.fromisoformat(fecha).isoformat() != fecha:
+      raise ValueError()
+  except (ValueError, TypeError):
+    raise ValueError('Fecha invalida.')
+  descripcion = body.get('descripcion')
+  clasificacion = body.get('clasificacion')
+  if not isinstance(descripcion, str) or not descripcion.strip() or len(descripcion) > 500:
+    raise ValueError('Descripcion obligatoria (maximo 500 caracteres).')
+  if not isinstance(clasificacion, str) or len(clasificacion) > 100:
+    raise ValueError('Clasificacion invalida.')
+  tipo = body.get('tipo')
+  if tipo not in ('Ahorro', 'Antojo', 'Necesidad'):
+    raise ValueError('Tipo invalido.')
+  abono, gasto = body.get('abono'), body.get('gasto')
+  if any(type(value) is not int or not 0 <= value <= 1_000_000_000_000 for value in (abono, gasto)) or (abono > 0) == (gasto > 0):
+    raise ValueError('Indica solo un abono o gasto positivo.')
+  return (fecha, descripcion.strip(), clasificacion.strip(), tipo, abono, gasto)
+
+
+def mutate_transaction(method, body):
+  if not isinstance(body, dict):
+    raise ValueError('Movimiento invalido.')
+  row = validate_transaction(body) if method != 'DELETE' else None
+  identifier = body.get('id')
+  if method != 'POST' and (type(identifier) is not int or identifier < 1):
+    raise ValueError('Identificador invalido.')
+  conn = get_connection(DB_PATH)
+  try:
+    init_schema(conn, str(BASE_DIR / 'sync' / 'schema.sql'))
+    with conn:
+      if method == 'POST':
+        cursor = conn.execute('INSERT INTO transactions (external_id, fecha, descripcion, clasificacion, tipo, abono, gasto) VALUES (?, ?, ?, ?, ?, ?, ?)', (f'manual:{uuid.uuid4()}', *row))
+        return cursor.lastrowid
+      old = conn.execute('SELECT external_id FROM transactions WHERE id=?', (identifier,)).fetchone()
+      if not old:
+        return None
+      conn.execute('INSERT OR IGNORE INTO sheet_protections (external_id) VALUES (?)', (old['external_id'],))
+      if method == 'PUT':
+        conn.execute('UPDATE transactions SET fecha=?, descripcion=?, clasificacion=?, tipo=?, abono=?, gasto=?, updated_at=CURRENT_TIMESTAMP WHERE id=?', (*row, identifier))
+      else:
+        conn.execute('DELETE FROM transactions WHERE id=?', (identifier,))
+      return identifier
+  finally:
+    conn.close()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -101,6 +156,10 @@ class Handler(BaseHTTPRequestHandler):
   def do_POST(self) -> None:
     parsed = urlparse(self.path)
 
+    if parsed.path == '/api/transaction':
+      self._mutate_transaction()
+      return
+
     if parsed.path == '/api/sync':
       try:
         require_session(self)
@@ -113,6 +172,34 @@ class Handler(BaseHTTPRequestHandler):
       return
 
     self._send_json({'error': 'not_found'}, status=404)
+
+  def do_PUT(self) -> None:
+    self._mutate_transaction()
+
+  def do_DELETE(self) -> None:
+    self._mutate_transaction()
+
+  def _mutate_transaction(self) -> None:
+    if urlparse(self.path).path != '/api/transaction':
+      self._send_json({'error': 'not_found'}, status=404)
+      return
+    try:
+      require_session(self)
+      size = int(self.headers.get('Content-Length', '0'))
+      if not 0 < size <= 4096:
+        raise ValueError('Solicitud invalida.')
+      body = json.loads(self.rfile.read(size))
+      identifier = mutate_transaction(self.command, body)
+      if identifier is None:
+        self._send_json({'error': 'Movimiento no encontrado.'}, status=404)
+      else:
+        self._send_json({'ok': True, 'id': identifier})
+    except AccessError as exc:
+      self._send_json({'error': str(exc)}, status=exc.status)
+    except (ValueError, TypeError) as exc:
+      self._send_json({'error': str(exc) if isinstance(exc, ValueError) else 'Solicitud invalida.'}, status=400)
+    except Exception:
+      self._send_json({'error': 'No se pudo guardar el movimiento.'}, status=500)
 
   def do_GET(self) -> None:
     parsed = urlparse(self.path)

@@ -42,6 +42,6 @@ const goTo = (target) => {
     @go-dashboard="goTo('#/dashboard')"
     @go-capture="goTo('#/capture')"
   />
-  <DashboardPage v-else-if="view === 'dashboard'" @go-home="goTo('#/')" />
-  <VoiceCapturePage v-else @go-home="goTo('#/')" />
+  <DashboardPage v-else-if="view === 'dashboard'" @go-home="goTo('#/')" @go-capture="goTo('#/capture')" />
+  <VoiceCapturePage v-else @go-home="goTo('#/')" @go-dashboard="goTo('#/dashboard')" />
 </template>

@@ -2,7 +2,8 @@ import { google } from 'googleapis'
 import {
   countTransactions,
   deleteMissingSheetTransactions,
-  upsertTransactions
+  upsertTransactions,
+  withTransaction
 } from './database.js'
 
 const REQUIRED_HEADERS = ['fecha', 'descripcion', 'clasificacion', 'tipo', 'abono', 'gasto']
@@ -16,17 +17,16 @@ function normalizeText(value) {
     .replace(/[^a-z0-9]/g, '')
 }
 
-function parseDate(value) {
+export function parseDate(value) {
   const text = String(value || '').trim()
   const match = text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/)
-  if (match) return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`
+  let fecha
+  if (match) fecha = `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`
 
   const reverseMatch = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/)
-  if (reverseMatch) {
-    return `${reverseMatch[3]}-${reverseMatch[2].padStart(2, '0')}-${reverseMatch[1].padStart(2, '0')}`
-  }
-
-  return null
+  if (reverseMatch) fecha = `${reverseMatch[3]}-${reverseMatch[2].padStart(2, '0')}-${reverseMatch[1].padStart(2, '0')}`
+  return fecha && Number.isFinite(Date.parse(`${fecha}T00:00:00Z`)) &&
+    new Date(`${fecha}T00:00:00Z`).toISOString().slice(0, 10) === fecha ? fecha : null
 }
 
 function parseMoney(value) {
@@ -74,14 +74,16 @@ export async function syncGoogleSheet() {
   })
   const [headers = [], ...records] = response.data.values || []
   const headerIndexes = Object.fromEntries(headers.map((header, index) => [normalizeText(header), index]))
+  if (REQUIRED_HEADERS.some((header) => headerIndexes[header] === undefined)) {
+    throw new Error('La hoja debe tener fecha, descripcion, clasificacion, tipo, abono y gasto.')
+  }
   const rows = []
+  const externalIds = []
   let skipped = 0
 
   for (const [index, record] of records.entries()) {
-    if (REQUIRED_HEADERS.some((header) => headerIndexes[header] === undefined)) {
-      throw new Error('La hoja debe tener fecha, descripcion, clasificacion, tipo, abono y gasto.')
-    }
-
+    const externalId = `${worksheetName}:${index + 2}`
+    externalIds.push(externalId)
     const fecha = parseDate(record[headerIndexes.fecha])
     if (!fecha) {
       skipped += 1
@@ -89,7 +91,7 @@ export async function syncGoogleSheet() {
     }
 
     rows.push({
-      externalId: `${worksheetName}:${index + 2}`,
+      externalId,
       fecha,
       descripcion: String(record[headerIndexes.descripcion] || '').trim() || 'Sin descripcion',
       clasificacion: String(record[headerIndexes.clasificacion] || '').trim(),
@@ -99,39 +101,17 @@ export async function syncGoogleSheet() {
     })
   }
 
-  await upsertTransactions(rows)
-  const deleted = await deleteMissingSheetTransactions(
-    worksheetName,
-    rows.map((row) => row.externalId)
-  )
+  const { deleted, total } = await withTransaction(async (run) => {
+    await upsertTransactions(rows, run)
+    const deleted = await deleteMissingSheetTransactions(worksheetName, externalIds, run)
+    return { deleted: deleted.rowCount || 0, total: await countTransactions(run) }
+  })
 
   return {
     processed: records.length,
     imported: rows.length,
     skipped,
-    deleted: deleted.rowCount || 0,
-    total: await countTransactions()
+    deleted,
+    total
   }
-}
-
-export async function appendVoiceToSheet(draft) {
-  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID
-  const worksheetName = process.env.GOOGLE_SHEETS_WORKSHEET || 'Gastos'
-  if (!spreadsheetId) throw new Error('Missing spreadsheet configuration')
-  const auth = new google.auth.GoogleAuth({
-    credentials: getCredentials(), scopes: ['https://www.googleapis.com/auth/spreadsheets']
-  })
-  const sheets = google.sheets({ version: 'v4', auth })
-  const range = `'${worksheetName.replace(/'/g, "''")}'!A:Z`
-  const headerResponse = await sheets.spreadsheets.values.get({ spreadsheetId, range: `'${worksheetName.replace(/'/g, "''")}'!A1:Z1` })
-  const headers = headerResponse.data.values?.[0] || []
-  const names = headers.map(normalizeText)
-  if (REQUIRED_HEADERS.some(key => !names.includes(key))) throw new Error('Invalid sheet headers')
-  const response = await sheets.spreadsheets.values.append({
-    spreadsheetId, range, valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS',
-    requestBody: { values: [names.map(key => draft[key] ?? '')] }
-  })
-  const row = response.data.updates?.updatedRange?.match(/![A-Z]+(\d+)(?::[A-Z]+\d+)?$/)?.[1]
-  if (!row) throw new Error('Missing appended sheet row')
-  return { worksheet: worksheetName, external_id: `${worksheetName}:${row}` }
 }

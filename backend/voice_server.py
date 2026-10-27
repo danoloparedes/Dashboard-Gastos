@@ -49,12 +49,6 @@ class Handler(BaseHTTPRequestHandler):
 
     if parsed.path == '/api/voice/config':
       self._send_json({'result': {
-        'default_target': 'sqlite',
-        'targets': [
-          {'value': 'sqlite', 'label': 'Dashboard local'},
-          {'value': 'sheets', 'label': 'Google Sheets'},
-          {'value': 'both', 'label': 'Dashboard local + Google Sheets'},
-        ],
         'max_audio_bytes': 24000000,
       }})
       return
@@ -198,7 +192,7 @@ class Handler(BaseHTTPRequestHandler):
       try:
         payload = self._read_json()
         draft = payload.get('draft') or {}
-        persist_target = str(payload.get('persist_target', 'sqlite'))
+        persist_target = payload.get('persist_target', 'sqlite')
         result = save_draft(draft, persist_target)
         self._send_json({'ok': True, 'result': result})
       except Exception as exc:  # pragma: no cover

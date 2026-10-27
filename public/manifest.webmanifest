@@ -4,8 +4,8 @@
   "description": "Dashboard y captura de gastos por voz",
   "start_url": "/#/capture",
   "display": "standalone",
-  "background_color": "#f3efe6",
-  "theme_color": "#1f8ea6",
+  "background_color": "#f2f5f8",
+  "theme_color": "#172b45",
   "icons": [
     {
       "src": "/favicon.png",
